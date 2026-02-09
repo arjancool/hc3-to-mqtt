@@ -201,18 +201,38 @@ function MqttConventionHomeAssistant:onDeviceNodeCreated(deviceNode)
     ---- SENSOR SPECIFIC
     ------------------------------------------
     if (haEntity.type == "binary_sensor" or haEntity.type == "sensor") then
-        -- *** refactor, but keep device_class 'None' when default sensor is used by the QuickApp
-        if (PrototypeEntity.subtype ~= haEntity.subtype) then
+        -- Set unit of measurement
+        local unit = haEntity.unitOfMeasurement
+        msg.unit_of_measurement = unit
+
+        -- Assign device_class dynamically based on unit
+        -- (fix by Eroi69: original code only used subtype, which missed A, V, W, kWh, Wh)
+        local unit_to_device_class = {
+            ["A"]   = "current",
+            ["V"]   = "voltage",
+            ["W"]   = "power",
+            ["kWh"] = "energy",
+            ["Wh"]  = "energy",
+            ["°C"]  = "temperature",
+            ["°F"]  = "temperature",
+            ["lx"]  = "illuminance",
+            ["%"]   = "humidity"
+            -- optionally: ["Hz"] = "frequency", ["dB"] = "signal_strength", etc.
+        }
+
+        -- First try unit-based mapping, then fall back to subtype
+        local deviceClassFromUnit = unit_to_device_class[unit]
+        if deviceClassFromUnit then
+            msg.device_class = deviceClassFromUnit
+        elseif (PrototypeEntity.subtype ~= haEntity.subtype) then
             msg.device_class = haEntity.subtype
         end
-        -- *** refactor?
-        if (PrototypeEntity.unitOfMeasurement ~= haEntity.unitOfMeasurement) then
-            msg.unit_of_measurement = haEntity.unitOfMeasurement
-        end
 
-        -- Energy meter requires extra properties
-        if (haEntity.subtype == "energy") then
+        -- Assign correct state_class
+        if msg.device_class == "energy" then
             msg.state_class = "total_increasing"
+        elseif msg.device_class then
+            msg.state_class = "measurement"
         end
 
         if (haEntity.subtype == RemoteController.subtype) then
