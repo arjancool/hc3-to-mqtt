@@ -450,6 +450,11 @@ end
 deviceModifiedEventTimestamps = {}
 deviceCreatedEventTimestamps = {}
 function QuickApp:dispatchFibaroEventToMqtt(event)
+    local targetID = 226 -- Pas dit aan naar het ID van je dimmer
+    local devId = event.data.id or event.data.deviceId
+    if (devId == targetID) then
+        self:warning("RAW EVENT VOOR " .. devId .. ": " .. json.encode(event))
+    end
     if (not event) then
         self:error("No event found")
         return
@@ -485,10 +490,26 @@ function QuickApp:dispatchFibaroEventToMqtt(event)
                 if (eventType == "DevicePropertyUpdatedEvent") then
                     return self:dispatchDevicePropertyUpdatedEvent(deviceNode, event) 
                 elseif (eventType == "CentralSceneEvent") then
-                    -- convert to DevicePropertyUpdatedEvent event, so we reuse the existing value dispatch mechanism rather than reinventing a wheel
-                    local keyValueMapAsString = event.data.keyId .. "," .. string.lower(event.data.keyAttribute)
-                    self:trace("Action => " .. event.data.keyId .. "-" .. string.lower(event.data.keyAttribute))
-                    return self:simulatePropertyUpdate(deviceNode, "value", keyValueMapAsString)
+                    local keyId = event.data.keyId
+                    local keyAttr = string.lower(event.data.keyAttribute)
+                    
+                    -- Loggen als WARNING zodat je het altijd ziet
+                    self:warning("Scene Event: Knop " .. keyId .. " actie: " .. keyAttr)
+
+                    -- Stuur een speciaal bericht naar MQTT voor Home Assistant
+                    -- Topic: homeassistant/event/DEVICE_ID
+                    local scenePayload = json.encode({
+                        event_type = "central_scene",
+                        device_id = fibaroDeviceId,
+                        button = keyId,
+                        action = keyAttr
+                    })
+                    
+                    self.mqtt:publish("homeassistant/event/" .. fibaroDeviceId, scenePayload, {retain = false})
+
+                    -- We stoppen hier, zodat we NIET proberen de lamp-status te updaten
+                    return 
+
                 elseif (eventType == "DeviceModifiedEvent") then
                     -- *** Investigate the reasons for duplicate events and try to prevent it from happening, so code below could be simplified
                     -- Fibaro generates "DeviceModifiedEvent" event after "DeviceCreatedEvent" => filter out the reduntant event 

@@ -387,6 +387,8 @@ local keyAttributeToTypeMap = {
     ["pressed"] = "button_short_press",
     ["pressed2"] = "button_double_press",
     ["pressed3"] = "button_triple_press",
+    ["pressed4"] = "button_quadruple_press",
+    ["pressed5"] = "button_quintuple_press",
     ["helddown"] = "button_long_press",
     ["released"] = "button_long_release"
 }
