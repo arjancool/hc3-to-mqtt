@@ -202,7 +202,7 @@ end
 function QuickApp:scheduleHeartbeat()
     if (self.hc3ConnectionEnabled) then
         -- Read configurable interval (default 60 seconds)
-        local heartbeatInterval = self:getVariable("heartbeatInterval")
+        local heartbeatInterval = self:getVariable("hbinterval")
         if (isEmptyString(heartbeatInterval)) then
             heartbeatInterval = 60
         else
