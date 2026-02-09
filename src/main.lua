@@ -1,17 +1,25 @@
---[[ RELEASE NOTES FOR 1.0.235
-Summary: Extending cover/shutter device with a broader hardware and properties support
+--[[ RELEASE NOTES FOR 1.0.235-fork-1
+Summary: Fork with heartbeat/alive MQTT message and sensor device_class fix
 
 Description:
-- Added more edge cases supported for cover/shutter device type
-- Further codebase maintainability and logging improvements
+- Added periodic heartbeat/alive MQTT message on topic "homeassistant/hc3-heartbeat"
+  Configurable interval via QuickApp variable "heartbeatInterval" (default: 60 seconds)
+  Payload includes: status, timestamp, uptime, version, device/entity count, IP address
+- Fixed device_class mapping for sensors based on unit (A, V, W, kWh, Wh, °C, lx, %)
+  (based on Eroi69's fork)
+- Added state_class "measurement" for non-energy sensors
+- Forked from alexander-vitishchenko/hc3-to-mqtt v1.0.235
 ]]--
 
 developmentMode = false
 
 function QuickApp:onInit()
+    self.startTime = os.time()
+
     self:debug("")
     self:debug("------- HC3 <-> MQTT BRIDGE")
-    self:debug("Version: 1.0.235")
+    self:debug("Version: 1.0.235-fork-1")
+    self:debug("Fork changes: Added heartbeat/alive MQTT message")
     self:debug("(!) IMPORTANT NOTE FOR THOSE USERS WHO USED THE QUICKAPP PRIOR TO 1.0.191 VERSION: Your Home Assistant dashboards and automations need to be reconfigured with new enity ids. This is a one-time effort that introduces a relatively \"small\" inconvenience for the greater good (a) introduce long-term stability so Home Assistant entity duplicates will not happen in certain scenarios (b) entity id namespaces are now syncronized between Fibaro and Home Assistant ecosystems")
 
     self:turnOn()
@@ -167,6 +175,61 @@ function QuickApp:onConnected(event)
     self:scheduleHc3EventsFetcher()
 
     self:updateProperty("value", true)
+
+    -- Start periodic heartbeat/alive message
+    self:scheduleHeartbeat()
+end
+
+--[[
+    HEARTBEAT / ALIVE MESSAGE
+    Publishes a periodic status message to MQTT so Home Assistant can monitor
+    whether the HC3 bridge is alive and responsive.
+    
+    Topic: homeassistant/hc3-heartbeat
+    Interval: configurable via "heartbeatInterval" QuickApp variable (default: 60 seconds)
+    
+    Payload example:
+    {
+        "status": "online",
+        "timestamp": "2025-01-15T14:30:00Z",
+        "uptime": 3600,
+        "version": "1.0.235-fork-1",
+        "devices": 42,
+        "entities": 58,
+        "ip": "192.168.1.100"
+    }
+]]--
+function QuickApp:scheduleHeartbeat()
+    if (self.hc3ConnectionEnabled) then
+        -- Read configurable interval (default 60 seconds)
+        local heartbeatInterval = self:getVariable("heartbeatInterval")
+        if (isEmptyString(heartbeatInterval)) then
+            heartbeatInterval = 60
+        else
+            heartbeatInterval = tonumber(heartbeatInterval)
+        end
+
+        -- Build heartbeat payload
+        local payload = json.encode({
+            status = "online",
+            timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ"),
+            uptime = os.time() - self.startTime,
+            version = "1.0.235-fork-1",
+            devices = allFibaroDevicesAmount or 0,
+            entities = identifiedHaEntitiesAmount or 0,
+            ip = localIpAddress or "unknown"
+        })
+
+        -- Publish to MQTT
+        self.mqtt:publish("homeassistant/hc3-heartbeat", payload, {retain = true})
+
+        self:trace("Heartbeat published (next in " .. heartbeatInterval .. "s)")
+
+        -- Schedule next heartbeat
+        fibaro.setTimeout(heartbeatInterval * 1000, function()
+            self:scheduleHeartbeat()
+        end)
+    end
 end
 
 function QuickApp:discoverDevicesAndPublishToMqtt()
