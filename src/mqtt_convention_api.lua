@@ -113,10 +113,17 @@ function MqttConventionHomeAssistant:onDeviceNodeCreated(deviceNode)
     ------------------------------------------
     --- AVAILABILITY
     ------------------------------------------
+
     local msg = {
         unique_id = tostring(haEntity.id),
-        object_id = tostring(haEntity.id),
+        -- object_id = tostring(haEntity.id),  -- OUDE REGEL (uitgeschakeld)
+        default_entity_id = haEntity.type .. "." .. haEntity.id, -- NIEUWE REGEL
         name = haEntity.name .. " (" .. haEntity.roomName .. ")",
+
+    -- local msg = {
+    --     unique_id = tostring(haEntity.id),
+    --     object_id = tostring(haEntity.id),
+    --     name = haEntity.name .. " (" .. haEntity.roomName .. ")",
 
         availability_mode = "all",
         availability = {
