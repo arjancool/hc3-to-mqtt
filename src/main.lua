@@ -453,7 +453,7 @@ function QuickApp:dispatchFibaroEventToMqtt(event)
     local targetID = 226 -- Pas dit aan naar het ID van je dimmer
     local devId = event.data.id or event.data.deviceId
     if (devId == targetID) then
-        self:warning("RAW EVENT VOOR " .. devId .. ": " .. json.encode(event))
+        self:debug("RAW EVENT VOOR " .. devId .. ": " .. json.encode(event))
     end
     if (not event) then
         self:error("No event found")
