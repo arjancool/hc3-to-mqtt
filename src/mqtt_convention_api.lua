@@ -131,13 +131,18 @@ function MqttConventionHomeAssistant:onDeviceNodeCreated(deviceNode)
                 topic = self:getLastWillAvailabilityTopic(),
                 payload_available = "online",
                 payload_not_available = "offline"
-            }
-            ,
+            },
             {
                 topic = self:getterTopic(haEntity, "dead"),
                 payload_available = "false",
                 payload_not_available = "true",
                 value_template = "{{ value_json.value }}"
+            },
+            {
+                topic = self.rootTopic .. "hc3-heartbeat",
+                payload_available = "online",
+                payload_not_available = "offline",
+                value_template = "{{ value_json.status }}"
             }
         },
 
