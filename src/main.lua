@@ -5,11 +5,20 @@ Description:
 - Added periodic heartbeat/alive MQTT message on topic "homeassistant/hc3-heartbeat"
   Configurable interval via QuickApp variable "heartbeatInterval" (default: 60 seconds)
   Payload includes: status, timestamp, uptime, version, device/entity count, IP address
+  IP/version disclosure can be disabled via QuickApp variable "heartbeatIncludeMeta=false"
 - Fixed device_class mapping for sensors based on unit (A, V, W, kWh, Wh, °C, lx, %)
   (based on Eroi69's fork)
 - Added state_class "measurement" for non-energy sensors
 - Forked from alexander-vitishchenko/hc3-to-mqtt v1.0.235
 ]]--
+
+local QUICKAPP_VERSION = "1.0.235-fork-1"
+local DEFAULT_HEARTBEAT_INTERVAL = 60
+local DEFAULT_RECONNECT_DELAY_MS = 10000
+local DEFAULT_KEEPALIVE = 60
+local FAST_POLL_DELAY_MS = 50
+local SLOW_POLL_DELAY_MS = 1000
+local HC3_REFRESH_STATES_URL = "http://127.0.0.1:11111/api/refreshStates"
 
 developmentMode = false
 
@@ -18,9 +27,9 @@ function QuickApp:onInit()
 
     self:debug("")
     self:debug("------- HC3 <-> MQTT BRIDGE")
-    self:debug("Version: 1.0.235-fork-1")
+    self:debug("Version: " .. QUICKAPP_VERSION)
     self:debug("Fork changes: Added heartbeat/alive MQTT message")
-    self:debug("(!) IMPORTANT NOTE FOR THOSE USERS WHO USED THE QUICKAPP PRIOR TO 1.0.191 VERSION: Your Home Assistant dashboards and automations need to be reconfigured with new enity ids. This is a one-time effort that introduces a relatively \"small\" inconvenience for the greater good (a) introduce long-term stability so Home Assistant entity duplicates will not happen in certain scenarios (b) entity id namespaces are now syncronized between Fibaro and Home Assistant ecosystems")
+    self:debug("(!) IMPORTANT NOTE FOR THOSE USERS WHO USED THE QUICKAPP PRIOR TO 1.0.191 VERSION: Your Home Assistant dashboards and automations need to be reconfigured with new entity ids. This is a one-time effort that introduces a relatively \"small\" inconvenience for the greater good (a) introduce long-term stability so Home Assistant entity duplicates will not happen in certain scenarios (b) entity id namespaces are now synchronized between Fibaro and Home Assistant ecosystems")
 
     self:turnOn()
 end
@@ -53,6 +62,9 @@ function QuickApp:establishMqttConnection()
 
     -- Anonymize MQTT username and password before being printed to log
     local status, anonymizedMqttConnectionParameters = pcall(clone, mqttConnectionParameters)
+    if (not status) or (not anonymizedMqttConnectionParameters) then
+        anonymizedMqttConnectionParameters = { note = "anonymization failed" }
+    end
     if (anonymizedMqttConnectionParameters.username) then
         anonymizedMqttConnectionParameters.username = "anonymized-username"
     end
@@ -61,9 +73,16 @@ function QuickApp:establishMqttConnection()
     end
     self:trace("MQTT Connection Parameters: " .. json.encode(anonymizedMqttConnectionParameters))
 
+    local mqttUrl = self:getVariable("mqttUrl")
+    if isEmptyString(mqttUrl) then
+        self:error("'mqttUrl' QuickApp variable is not set; cannot connect to MQTT broker")
+        return
+    end
+    self:trace("MQTT URL: " .. sanitizeMqttUrl(mqttUrl))
+
     local mqttClient = mqtt.Client.connect(
-                                    self:getVariable("mqttUrl"),
-                                    mqttConnectionParameters) 
+                                    mqttUrl,
+                                    mqttConnectionParameters)
 
     mqttClient:addEventListener('connected', function(event) self:onConnected(event) end)
     mqttClient:addEventListener('closed', function(event) self:onClosed(event) end)
@@ -91,10 +110,11 @@ function QuickApp:getMqttConnectionParameters()
 
     -- MQTT KEEP ALIVE PERIOD
     local mqttKeepAlivePeriod = self:getVariable("mqttKeepAlive")
-    if (mqttKeepAlivePeriod) then
-        mqttConnectionParameters.keepAlivePeriod = tonumber(mqttKeepAlivePeriod)
+    local parsedKeepAlive = tonumber(mqttKeepAlivePeriod)
+    if parsedKeepAlive and parsedKeepAlive > 0 then
+        mqttConnectionParameters.keepAlivePeriod = parsedKeepAlive
     else
-        mqttConnectionParameters.keepAlivePeriod = 60
+        mqttConnectionParameters.keepAlivePeriod = DEFAULT_KEEPALIVE
     end
 
     -- MQTT AUTH (USERNAME/PASSWORD)
@@ -126,12 +146,6 @@ function QuickApp:closeMqttConnection()
     self.mqtt:disconnect()
 end
 
-function QuickApp:disconnectFromMqttAndHc3()
-    self.hc3ConnectionEnabled = false
-    self:closeMqttConnection()
-end
-
-
 function QuickApp:onClosed(event)
     self:updateProperty("value", false)
     self:debug("")
@@ -148,7 +162,7 @@ function QuickApp:onError(event)
 end
 
 function QuickApp:scheduleReconnectToMqtt()
-    fibaro.setTimeout(10000, function() 
+    fibaro.setTimeout(DEFAULT_RECONNECT_DELAY_MS, function()
         self:debug("Attempt to reconnect to MQTT...")
         self:establishMqttConnection()
     end)
@@ -176,19 +190,24 @@ function QuickApp:onConnected(event)
 
     self:updateProperty("value", true)
 
-    -- Start periodic heartbeat/alive message
-    self:scheduleHeartbeat()
+    -- Start periodic heartbeat/alive message; bump generation so any
+    -- previously-scheduled timer chain from a prior connection self-cancels.
+    self.heartbeatGeneration = (self.heartbeatGeneration or 0) + 1
+    self:scheduleHeartbeat(self.heartbeatGeneration)
 end
 
 --[[
     HEARTBEAT / ALIVE MESSAGE
     Publishes a periodic status message to MQTT so Home Assistant can monitor
     whether the HC3 bridge is alive and responsive.
-    
+
     Topic: homeassistant/hc3-heartbeat
     Interval: configurable via "heartbeatInterval" QuickApp variable (default: 60 seconds)
-    
-    Payload example:
+
+    Optional QuickApp variables:
+    - heartbeatIncludeMeta = "false" to omit IP/version/device counts (privacy)
+
+    Payload example (with meta):
     {
         "status": "online",
         "timestamp": "2025-01-15T14:30:00Z",
@@ -198,38 +217,57 @@ end
         "entities": 58,
         "ip": "192.168.1.100"
     }
+
+    The `generation` parameter ensures that if the QuickApp reconnects (and
+    starts a new heartbeat chain), older chains stop instead of running in
+    parallel.
 ]]--
-function QuickApp:scheduleHeartbeat()
-    if (self.hc3ConnectionEnabled) then
-        -- Read configurable interval (default 60 seconds)
-        local heartbeatInterval = self:getVariable("hbinterval")
-        if (isEmptyString(heartbeatInterval)) then
-            heartbeatInterval = 60
-        else
-            heartbeatInterval = tonumber(heartbeatInterval)
-        end
-
-        -- Build heartbeat payload
-        local payload = json.encode({
-            status = "online",
-            timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ"),
-            uptime = os.time() - self.startTime,
-            version = "1.0.235-fork-1",
-            devices = allFibaroDevicesAmount or 0,
-            entities = identifiedHaEntitiesAmount or 0,
-            ip = localIpAddress or "unknown"
-        })
-
-        -- Publish to MQTT
-        self.mqtt:publish("homeassistant/hc3-heartbeat", payload, {retain = true})
-
-        self:trace("Heartbeat published (next in " .. heartbeatInterval .. "s)")
-
-        -- Schedule next heartbeat
-        fibaro.setTimeout(heartbeatInterval * 1000, function()
-            self:scheduleHeartbeat()
-        end)
+function QuickApp:scheduleHeartbeat(generation)
+    if not self.hc3ConnectionEnabled then
+        return
     end
+    -- Cancel ourselves if a newer generation has been started (e.g. reconnect)
+    if generation ~= self.heartbeatGeneration then
+        return
+    end
+
+    -- Read configurable interval; reject non-positive values
+    local rawInterval = self:getVariable("heartbeatInterval")
+    local heartbeatInterval = tonumber(rawInterval)
+    if (not heartbeatInterval) or heartbeatInterval <= 0 then
+        if isNotEmptyString(rawInterval) then
+            self:warning("Invalid heartbeatInterval '" .. tostring(rawInterval) .. "' - falling back to default " .. DEFAULT_HEARTBEAT_INTERVAL .. "s")
+        end
+        heartbeatInterval = DEFAULT_HEARTBEAT_INTERVAL
+    end
+
+    -- Build heartbeat payload. Meta (IP/version/counts) can be opted out.
+    local includeMeta = self:getVariable("heartbeatIncludeMeta")
+    local payloadTable = {
+        status = "online",
+        timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ"),
+        uptime = os.time() - self.startTime,
+    }
+    if includeMeta ~= "false" then
+        payloadTable.version = QUICKAPP_VERSION
+        payloadTable.devices = allFibaroDevicesAmount or 0
+        payloadTable.entities = identifiedHaEntitiesAmount or 0
+        payloadTable.ip = localIpAddress or "unknown"
+    end
+
+    local published, err = pcall(function()
+        self.mqtt:publish("homeassistant/hc3-heartbeat", json.encode(payloadTable), {retain = true})
+    end)
+    if not published then
+        self:warning("Heartbeat publish failed: " .. tostring(err))
+    else
+        self:trace("Heartbeat published (next in " .. heartbeatInterval .. "s)")
+    end
+
+    -- Schedule next heartbeat in same generation
+    fibaro.setTimeout(heartbeatInterval * 1000, function()
+        self:scheduleHeartbeat(generation)
+    end)
 end
 
 function QuickApp:discoverDevicesAndPublishToMqtt()
@@ -240,7 +278,7 @@ function QuickApp:discoverDevicesAndPublishToMqtt()
     local phaseEndTime = os.time()
     
     self:debug("")
-    self:debug("-------- Fibaro device discovery has been complete in " .. (phaseEndTime - phaseStartTime) .. " second(s)")
+    self:debug("-------- Fibaro device discovery completed in " .. (phaseEndTime - phaseStartTime) .. " second(s)")
     self:debug("Total Fibaro devices                 : " .. allFibaroDevicesAmount)
     self:debug("Filtered Fibaro devices to           : " .. filteredFibaroDevicesAmount)
     self:debug("Number of Home Assistant entities    : " .. identifiedHaEntitiesAmount .. " => number of supported Fibaro devices + automatically generated entities for power, energy and battery sensors (when found appropriate interfaces for a Fibaro device) + automatically generated  remote controllers, where cartesian join is applied for each key and press types")
@@ -293,38 +331,9 @@ function QuickApp:publishDeviceNodeToMqtt(deviceNode)
     end
 end
 
-function QuickApp:discoverDevicesByFilter()
-    local fibaroDevices
-
-    local developmentModeStr = self:getVariable("developmentMode")
-    if ((not developmentModeStr) or (developmentModeStr ~= "true")) then
-        self:debug("Bridge mode: PRODUCTION")
-
-        local customDeviceFilterJsonStr = self:getVariable("deviceFilter")
-        if (isEmptyString(mqttClientId)) then
-            self:debug("All is good - default filter applied, where only enabled and visible devices are used")
-        end
-
-        fibaroDevices = getFibaroDevicesByFilter(customDeviceFilterJsonStr)
-    else
-        --smaller number of devices for development and testing purposes
-        self:debug("Bridge mode: DEVELOPMENT")
-
-        fibaroDevices = {
-            enrichFibaroDeviceWithMetaInfo(
-                json.decode(
-                    "{  }"
-                )
-            ) 
-        }
-    end
-
-    return fibaroDevices
-end
-
 function QuickApp:__publishDeviceNodeToMqtt(deviceNode)
     ------------------------------------------------------------------
-    ------- ANNOUNCE DEVICE EXISTANCE
+    ------- ANNOUNCE DEVICE EXISTENCE
     ------------------------------------------------------------------
     for i, j in ipairs(self.mqttConventions) do
         j:onDeviceNodeCreated(deviceNode)
@@ -355,7 +364,7 @@ end
 
 -- FETCH HC3 EVENTS
 local lastRefresh = 0
-local http = net.HTTPClient()
+local hc3HttpClient = net.HTTPClient()
 
 function QuickApp:scheduleHc3EventsFetcher()
     self.gotWarning = false
@@ -371,10 +380,10 @@ function QuickApp:scheduleAnotherPollingForHc3()
         local delay
         if self.gotWarning then
             -- avoid hitting errors with a "speed of light"
-            delay = 1000
+            delay = SLOW_POLL_DELAY_MS
         else
             -- provide fast events distribution to Home Assistant when no errors present
-            delay = 50
+            delay = FAST_POLL_DELAY_MS
         end
 
         fibaro.setTimeout(delay, function()
@@ -387,25 +396,26 @@ function QuickApp:scheduleAnotherPollingForHc3()
 end
 
 function QuickApp:readHc3EventAndScheduleFetcher()
-    -- This a reliable and high-performance method to get events from Fibaro HC3, by using non-blocking HTTP calls
+    -- Reliable and high-performance method to get events from Fibaro HC3 using non-blocking HTTP calls
 
-    local requestUrl = "http://127.0.0.1:11111/api/refreshStates?last=" .. lastRefresh
+    local requestUrl = HC3_REFRESH_STATES_URL .. "?last=" .. lastRefresh
 
-    local stat, res = http:request(
+    hc3HttpClient:request(
         requestUrl,
         {
         options = { },
         success=function(res)
-            local data
             if (res and not isEmptyString(res.data)) then
                 self:processFibaroHc3Events(json.decode(res.data))
                 self:scheduleAnotherPollingForHc3()
             else
-                self:error("Error while fetching events from Fibaro HC3. Response status code is " .. res.status .. ". HTTP response body is '" .. json.encode(res) .. "'")
+                local statusStr = (res and tostring(res.status)) or "<no response>"
+                local bodyStr = res and json.encode(res) or "<nil>"
+                self:error("Error while fetching events from Fibaro HC3. Response status: " .. statusStr .. ". Body: " .. bodyStr)
                 self:turnOff()
             end
         end,
-        error=function(res) 
+        error=function(res)
             self:error("Error while fetching Fibaro HC3 events " .. json.encode(res))
             self:turnOff()
         end
@@ -447,14 +457,9 @@ function QuickApp:simulatePropertyUpdate(fibaroDevice, propertyName, value)
     end
 end
 
-deviceModifiedEventTimestamps = {}
-deviceCreatedEventTimestamps = {}
+local deviceModifiedEventTimestamps = {}
+local deviceCreatedEventTimestamps = {}
 function QuickApp:dispatchFibaroEventToMqtt(event)
-    local targetID = 226 -- Pas dit aan naar het ID van je dimmer
-    local devId = event.data.id or event.data.deviceId
-    if (devId == targetID) then
-        self:debug("RAW EVENT VOOR " .. devId .. ": " .. json.encode(event))
-    end
     if (not event) then
         self:error("No event found")
         return
@@ -492,28 +497,25 @@ function QuickApp:dispatchFibaroEventToMqtt(event)
                 elseif (eventType == "CentralSceneEvent") then
                     local keyId = event.data.keyId
                     local keyAttr = string.lower(event.data.keyAttribute)
-                    
-                    -- Loggen als WARNING zodat je het altijd ziet
-                    self:warning("Scene Event: Knop " .. keyId .. " actie: " .. keyAttr)
 
-                    -- Stuur een speciaal bericht naar MQTT voor Home Assistant
-                    -- Topic: homeassistant/event/DEVICE_ID
+                    self:debug("Scene Event: button " .. tostring(keyId) .. " action: " .. tostring(keyAttr))
+
+                    -- Publish a discrete scene event for Home Assistant on a per-device topic.
+                    -- Topic: homeassistant/event/<DEVICE_ID>
                     local scenePayload = json.encode({
                         event_type = "central_scene",
                         device_id = fibaroDeviceId,
                         button = keyId,
                         action = keyAttr
                     })
-                    
+
                     self.mqtt:publish("homeassistant/event/" .. fibaroDeviceId, scenePayload, {retain = false})
 
-                    -- We stoppen hier, zodat we NIET proberen de lamp-status te updaten
-                    return 
+                    -- Don't fall through to property-update logic for scene events
+                    return
 
                 elseif (eventType == "DeviceModifiedEvent") then
-                    -- *** Investigate the reasons for duplicate events and try to prevent it from happening, so code below could be simplified
-                    -- Fibaro generates "DeviceModifiedEvent" event after "DeviceCreatedEvent" => filter out the reduntant event 
-                    
+                    -- Fibaro generates "DeviceModifiedEvent" event after "DeviceCreatedEvent" => filter out the redundant event
                     local deviceLastCreationTimestamp = deviceCreatedEventTimestamps[fibaroDeviceId]
                     local deviceLastModificationTimestamp = deviceModifiedEventTimestamps[fibaroDeviceId]
                     if ((deviceLastCreationTimestamp) and (deviceLastCreationTimestamp == event.created)) then
@@ -548,8 +550,8 @@ function QuickApp:dispatchFibaroEventToMqtt(event)
             return
         end
 
-    else 
-        -- process events for devices that are NOT REQUIRED to be known to the QuickApp 
+    else
+        -- process events for devices that are NOT REQUIRED to be known to the QuickApp
         if (eventType == "DeviceCreatedEvent") then
             deviceCreatedEventTimestamps[fibaroDeviceId] = event.created
             return self:dispatchDeviceCreatedEvent(fibaroDeviceId)
@@ -558,15 +560,6 @@ function QuickApp:dispatchFibaroEventToMqtt(event)
             return
         end
     end
-
-    -- Ignore and show no redundant warnings for unsupported event types
-    if (unsupportedFibaroEventTypes[eventType]) then
-        -- Ignore and show no redundant warnings
-        return
-    end
-
-    self:debug("Couldn't process event \"" .. eventType .. "\" for " .. getDeviceDescriptionById(fibaroDeviceId))
-    self:debug(json.encode(event))
 end
 
 function QuickApp:dispatchDevicePropertyUpdatedEvent(deviceNode, event)
@@ -607,9 +600,8 @@ function QuickApp:dispatchDevicePropertyUpdatedEvent(deviceNode, event)
                 j:onFibaroEvent(deviceNode, targetEvent)
             end
         end
-    else
-        -- event will be skipped as indicated by device's event parser
     end
+    -- if `targetEvent` is nil the device parser deliberately swallowed the event
 end
 
 function QuickApp:rememberLastMqttCommandTime(deviceId)
@@ -704,11 +696,3 @@ function QuickApp:logDeviceNode(id)
     print("Children count : " .. tostring(#deviceNode.childNodeList))
 end
 
-unsupportedFibaroEventTypes = {
-    DeviceActionRanEvent = true,
-    DeviceChangedRoomEvent = true,
-    QuickAppFilesChangedEvent = true, 
-    PluginChangedViewEvent = true
-}
-
--- *** FORMATTED LOG %d

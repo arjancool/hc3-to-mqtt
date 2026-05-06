@@ -85,9 +85,7 @@ function MqttConventionHomeAssistant:getLastWillMessage()
     return {
         topic = self:getLastWillAvailabilityTopic(),
         payload = "offline",
-        {
-            retain = true
-        }
+        retain = true
     }
 end
 
@@ -114,16 +112,12 @@ function MqttConventionHomeAssistant:onDeviceNodeCreated(deviceNode)
     --- AVAILABILITY
     ------------------------------------------
 
+    -- We use `default_entity_id` (HA 2024.2+) to suggest a stable entity_id
+    -- like `light.226` instead of the legacy `object_id` slot.
     local msg = {
         unique_id = tostring(haEntity.id),
-        -- object_id = tostring(haEntity.id),  -- OUDE REGEL (uitgeschakeld)
-        default_entity_id = haEntity.type .. "." .. haEntity.id, -- NIEUWE REGEL
+        default_entity_id = haEntity.type .. "." .. haEntity.id,
         name = haEntity.name .. " (" .. haEntity.roomName .. ")",
-
-    -- local msg = {
-    --     unique_id = tostring(haEntity.id),
-    --     object_id = tostring(haEntity.id),
-    --     name = haEntity.name .. " (" .. haEntity.roomName .. ")",
 
         availability_mode = "all",
         availability = {
@@ -219,17 +213,21 @@ function MqttConventionHomeAssistant:onDeviceNodeCreated(deviceNode)
 
         -- Assign device_class dynamically based on unit
         -- (fix by Eroi69: original code only used subtype, which missed A, V, W, kWh, Wh)
+        --
+        -- NOTE: "%" is NOT mapped here because it is ambiguous (humidity, battery,
+        -- position, etc.). For "%" we trust the subtype that the device_api set,
+        -- so a battery sensor remains battery, a humidity sensor remains humidity.
         local unit_to_device_class = {
             ["A"]   = "current",
             ["V"]   = "voltage",
             ["W"]   = "power",
+            ["kW"]  = "power",
             ["kWh"] = "energy",
             ["Wh"]  = "energy",
             ["°C"]  = "temperature",
             ["°F"]  = "temperature",
             ["lx"]  = "illuminance",
-            ["%"]   = "humidity"
-            -- optionally: ["Hz"] = "frequency", ["dB"] = "signal_strength", etc.
+            ["Hz"]  = "frequency",
         }
 
         -- First try unit-based mapping, then fall back to subtype
@@ -388,6 +386,7 @@ function MqttConventionHomeAssistant:onRemoteControllerKeyCreated(deviceNode, mq
     mqtt:publish(self:getDeviceTopic(haEntity) .. "config", json.encode(msg), {retain = true})
 end
 
+-- Mapping from Fibaro central-scene key attributes to Home Assistant trigger types
 local keyAttributeToTypeMap = {
     ["pressed"] = "button_short_press",
     ["pressed2"] = "button_double_press",
@@ -400,8 +399,10 @@ local keyAttributeToTypeMap = {
 function MqttConventionHomeAssistant:convertKeyAttributeToType(keyAttribute)
     local type = keyAttributeToTypeMap[keyAttribute]
     if not type then
-        print("Unknown key attribute \"" .. tostring(keyAttribute) .. "\"")
-        type = "unknown-" .. keyAttribute
+        if __logger then
+            __logger:warning("Unknown key attribute \"" .. tostring(keyAttribute) .. "\"")
+        end
+        type = "unknown-" .. tostring(keyAttribute)
     end
 
     return type
@@ -463,10 +464,21 @@ function MqttConventionHomeAssistant:onHomeAssistantEvent(event)
         local deviceId = tonumber(topicElements[3])
         local propertyName = topicElements[6]
 
-        local device = deviceNodeById[deviceId].identifiedHaEntity
+        if not deviceId then
+            return
+        end
 
+        local node = deviceNodeById[deviceId]
+        if not node or not node.identifiedHaEntity then
+            -- Command for an unknown / unsupported device; ignore safely
+            if __logger then
+                __logger:trace("Ignoring HA command for unknown device id " .. tostring(deviceId))
+            end
+            return
+        end
+
+        local device = node.identifiedHaEntity
         local value = tostring(event.payload)
-
         local params = splitStringToNumbers(value, ",")
 
         device:setProperty(propertyName, params)
@@ -539,10 +551,7 @@ function MqttConventionHomie:onDeviceNodeCreated(deviceNode)
 
     if (device.supportsRead) then
         local propertyName = device.type
-        -- *** get rid of this check
-        --if (PrototypeEntity.subtype ~= device.subtype) then
-            propertyName = propertyName .. " - " .. tostring(device.subtype)
-        --end
+        propertyName = propertyName .. " - " .. tostring(device.subtype)
 
         if (device.supportsBinary) then
             properties["state"] = {
@@ -613,12 +622,18 @@ function MqttConventionHomie:onHomeAssistantEvent(event)
     if (string.find(event.topic, self.rootTopic) == 1) then
         local topicElements = splitString(event.topic, "/")
         local deviceId = tonumber(topicElements[2])
-        local device = deviceNodeById[deviceId].identifiedHaEntity
+        if not deviceId then
+            return
+        end
+        local node = deviceNodeById[deviceId]
+        if not node or not node.identifiedHaEntity then
+            return
+        end
 
         local propertyName = topicElements[4]
         local value = event.payload
 
-        device:setProperty(propertyName, value)
+        node.identifiedHaEntity:setProperty(propertyName, value)
     end
 end
 
@@ -651,7 +666,15 @@ mqttConventionMappings = {
     ["home-assistant"] = MqttConventionHomeAssistant,
     ["homie"] = MqttConventionHomie,
     ["debug"] = MqttConventionDebug
-} 
+}
 
-
-localIpAddress = identifyLocalIpAddressForHc3()
+-- Module-level IP lookup is wrapped in pcall so a transient API issue at load
+-- time doesn't prevent the QuickApp from starting.
+do
+    local ok, ip = pcall(identifyLocalIpAddressForHc3)
+    if ok then
+        localIpAddress = ip
+    else
+        localIpAddress = "unknown"
+    end
+end

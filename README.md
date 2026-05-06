@@ -4,6 +4,17 @@
 > The original project bridges Fibaro HC3/HCL/Yubii Home devices to Home Assistant via MQTT.
 > This fork adds a heartbeat/alive feature and improved sensor device_class mapping.
 
+## Contents
+
+- [Fork changes](#-fork-changes-v10235-fork-1)
+  - [Heartbeat / Alive message](#heartbeat--alive-message)
+  - [Improved sensor device_class mapping](#improved-sensor-device_class-mapping)
+- [How to use](#how-to-use)
+- [Supported device types](#already-supported-device-types)
+- [Building the .fqa from source](#building-the-fqa-from-source)
+- [Security considerations](#security-considerations)
+- [Credits](#credits)
+
 ## 🔀 Fork changes (v1.0.235-fork-1)
 
 ### Heartbeat / Alive message
@@ -34,6 +45,21 @@ The heartbeat interval can be configured via the QuickApp variable `heartbeatInt
 4. Save and restart the QuickApp
 
 If the variable is not set, the default interval of **60 seconds** is used. Lower values give faster detection of connection issues, but generate more MQTT traffic. A value of `30` is a good balance for most setups.
+
+#### Privacy: opt out of metadata in heartbeat
+
+By default the heartbeat payload contains the HC3's local IP, the QuickApp version, and the device/entity counts. If you don't want these published (e.g. on a shared MQTT broker), add a QuickApp variable:
+
+| Name | Value | Effect |
+|------|-------|--------|
+| `heartbeatIncludeMeta` | `false` | Strips `version`, `devices`, `entities`, `ip` from the heartbeat payload (only `status`, `timestamp`, `uptime` remain) |
+
+#### Heartbeat vs availability topic
+
+This fork publishes **two** related topics:
+
+- `homeassistant/hc3-status` — last-will availability topic, plain string `online` / `offline`. Used as the primary availability source for all bridged entities.
+- `homeassistant/hc3-heartbeat` — periodic JSON heartbeat. Useful for detecting a hung QuickApp where the MQTT connection is still up but events have stopped flowing.
 
 #### Home Assistant MQTT sensor configuration
 
@@ -73,14 +99,13 @@ Based on [Eroi69's fix](https://github.com/Eroi69/hc3-to-mqtt/commit/7bc34385f75
 |------|-------------|-------------|
 | A | current | measurement |
 | V | voltage | measurement |
-| W | power | measurement |
-| kWh | energy | total_increasing |
-| Wh | energy | total_increasing |
+| W / kW | power | measurement |
+| kWh / Wh | energy | total_increasing |
 | °C / °F | temperature | measurement |
 | lx | illuminance | measurement |
-| % | humidity | measurement |
+| Hz | frequency | measurement |
 
-Falls back to the original subtype-based logic for units not in this mapping.
+For ambiguous units (e.g. `%` is used by humidity, battery, position) the mapping **falls back to the device subtype** to avoid mis-classifying battery sensors as humidity. Other units not in this table also fall back to the original subtype-based logic.
 
 ---
 
@@ -110,9 +135,10 @@ Falls back to the original subtype-based logic for units not in this mapping.
     <li>
         Configure your Fibaro QuickApp:<br>
         <ul>
-            <li> "<b>mqttUrl</b>" - URL for connecting to MQTT broker, e.g. "mqtt://192.168.1.10:1883"</li>
+            <li> "<b>mqttUrl</b>" - URL for connecting to MQTT broker, e.g. <code>mqtt://192.168.1.10:1883</code> or <code>mqtts://192.168.1.10:8883</code> for TLS. <b>Use <code>mqtts://</code> whenever possible</b> — plain <code>mqtt://</code> sends username/password unencrypted over the network.</li>
             <li> "<b>mqttUsername</b>" and "<b>mqttPassword</b>" (optional) - user credentials for MQTT authentication</li>
             <li> "<b>heartbeatInterval</b>" (optional) - interval in seconds for the heartbeat message (default: 60)</li>
+            <li> "<b>heartbeatIncludeMeta</b>" (optional) - set to <code>false</code> to omit IP/version/device counts from heartbeat (privacy)</li>
             <li> "<b>deviceFilter</b>" (optional) - apply your filters for Fibaro HC3 device autodiscovery in case you need to limit the number of devices to be bridged with Home Assistant. <br>
             <details>
                <summary>Click here to see example</summary>
@@ -132,6 +158,30 @@ Falls back to the original subtype-based logic for units not in this mapping.
    * Switches - binary and sound
    * Remote Controllers, where each key is binded to automation triggers visible in Home Assistant GUI
    * Thermostats (limited support for a few known vendors) 
+
+## Building the .fqa from source
+
+The `.fqa` is a JSON file that bundles the Lua sources together with QuickApp metadata. To rebuild it from `src/`:
+
+```bash
+python3 scripts/build_fqa.py
+```
+
+This produces `hc3_to_mqtt_bridge-1.0.235-fork-1.fqa` in the repository root, with the contents of every `src/*.lua` injected into the corresponding QuickApp file slot. The script preserves the existing QuickApp variable defaults and view layout from the previous `.fqa`. Use `--check` to verify that the committed `.fqa` is in sync with `src/` without writing.
+
+```bash
+python3 scripts/build_fqa.py --check
+```
+
+## Security considerations
+
+- **Use TLS.** Configure `mqttUrl` with the `mqtts://` scheme and a TLS-enabled broker. Plain `mqtt://` sends credentials and device state in clear text.
+- **MQTT broker authorization.** The bridge publishes device state under `homeassistant/+/+/`. Treat read access to your broker as device-state access; restrict ACLs accordingly.
+- **Heartbeat metadata.** The default heartbeat reveals the HC3's local IP, QuickApp version and device counts. Set the QuickApp variable `heartbeatIncludeMeta=false` if these are sensitive in your environment.
+- **Credentials in `mqttUrl`.** Avoid embedding `user:pass@` directly in `mqttUrl`. Use the dedicated `mqttUsername` / `mqttPassword` QuickApp variables — those are anonymized in logs.
+- **QuickApp variables are not encrypted at rest.** Anyone with admin access to the HC3 can read them. Use a dedicated MQTT account with the minimum required ACL.
+
+See [SECURITY.md](SECURITY.md) for how to report vulnerabilities.
 
 ## Credits
 

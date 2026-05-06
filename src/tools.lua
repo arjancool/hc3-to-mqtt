@@ -27,7 +27,7 @@ local alphabet = {
     ["Ц"] = "C",
     ["Ш"] = "Sh",
     ["Щ"] = "Shch",
-    ["И"] = "I",
+    ["Ы"] = "Y",
     ["Є"] = "E",
     ["Э"] = "E",
     ["Ю"] = "Ju",
@@ -150,6 +150,8 @@ function splitString(str, sep)
 end
 
 
+-- NB: historically returns string fields - kept for backwards compatibility.
+-- Use tonumber() at the call site if you actually need numbers.
 function splitStringToNumbers(str, sep)
   local fields = {}
   str:gsub("([^" .. sep .."]+)",function(c) fields[#fields+1]=c end)
@@ -223,25 +225,21 @@ function decodeBase64Auth(encoded)
 end
 
 function shallowInsertTo(from, to)
-    local orig_type = type(from)
-    if orig_type == 'table' then
-        for orig_key, orig_value in pairs(from) do
+    if type(from) == 'table' then
+        for _, orig_value in pairs(from) do
             table.insert(to, orig_value)
         end
-    else -- number, string, boolean, etc
-        copy = from
     end
+    -- non-table inputs are no-ops (previously they wrote to a stray global)
 end
 
 function shallowCopyTo(from, to)
-    local orig_type = type(from)
-    if orig_type == 'table' then
+    if type(from) == 'table' then
         for orig_key, orig_value in pairs(from) do
             to[orig_key] = orig_value
         end
-    else -- number, string, boolean, etc
-        copy = from
     end
+    -- non-table inputs are no-ops (previously they wrote to a stray global)
 end
 
 
@@ -275,8 +273,7 @@ function isNumber(value)
 end
 
 function round(number, dec)
-    local k = 10^dec
-
+    local k = 10 ^ dec
     local result = math.floor(number * k + 0.5) / k
 
     local resultWithoutTrailingZero = math.floor(result)
@@ -285,8 +282,6 @@ function round(number, dec)
     else
         return resultWithoutTrailingZero
     end
-
-    return result
 end
 
 function identifyLocalIpAddressForHc3()
@@ -302,17 +297,17 @@ function identifyLocalIpAddressForHc3()
     return "unknown"
 end
 
-table.indexOf = function( t, object )
-\tlocal result
+table.indexOf = function(t, object)
+    local result
 
-    for i=1,#t do
+    for i = 1, #t do
         if object == t[i] then
             result = i
             break
         end
     end
 
-\treturn result
+    return result
 end
 
 function getCompositeQuickAppVariable(quickApp, variableName)
@@ -333,8 +328,8 @@ function getCompositeQuickAppVariable(quickApp, variableName)
     return compositeValue
 end
 
-errorCacheMap = { }
-errorCacheTimeout = 60
+local errorCacheMap = {}
+local errorCacheTimeout = 60
 function logWithoutRepetableWarnings(data)
     -- filter out repeatable errors
     local lastErrorReceivedTimestamp = errorCacheMap[data.status]
@@ -346,4 +341,10 @@ function logWithoutRepetableWarnings(data)
         -- mute repeatable warnings temporary (avoid spamming to logs)
         errorCacheMap[data.status] = currentTimestamp
     end
+end
+
+-- Strip credentials from a "scheme://user:pass@host:port" style URL for safe logging
+function sanitizeMqttUrl(url)
+    if not url then return "<nil>" end
+    return string.gsub(tostring(url), "(://)([^@/]+)@", "%1***:***@")
 end
