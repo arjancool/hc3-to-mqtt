@@ -9,9 +9,11 @@ allFibaroDevicesAmount = 0
 filteredFibaroDevicesAmount = 0
 identifiedHaEntitiesAmount = 0
 
-__allFibaroDevices = nil
-__filteredFibaroDeviceIds = nil
+-- Internal caches; only referenced within this file
+local __allFibaroDevices = nil
+local __filteredFibaroDeviceIds = nil
 
+-- Logger reference - shared with device_api.lua
 __logger = nil
 
 -----------------------------------
@@ -49,7 +51,7 @@ function cleanDeviceCache()
 
     __allFibaroDevices = nil
     __filteredFibaroDeviceIds = nil
-    __logger = nil
+    -- Note: __logger is intentionally NOT reset here because it is re-assigned by getDeviceHierarchyByFilter
 end
 
 function getDeviceHierarchyByFilter(customDeviceFilterJsonStr, logger)
@@ -131,7 +133,7 @@ function getDeviceHierarchyByFilter(customDeviceFilterJsonStr, logger)
         ----------- INCLUDE NODE WITH DEVICE MATCHING FILTER CRITERIA
         deviceNode.included = true
 
-        ----------- CREATE POWER, ENERGY & BATTERLY LEVEL SENSORS INSTEAD OF RELYING ON ATTRIBUTES WITHIN A SINGLE DEVICE
+        ----------- CREATE POWER, ENERGY & BATTERY LEVEL SENSORS INSTEAD OF RELYING ON ATTRIBUTES WITHIN A SINGLE DEVICE
         __checkAndAppendLinkedDevices(fibaroDevice)
     end
 
@@ -616,277 +618,6 @@ function __addSimulatedDevices()
   \"sortOrder\": 97\
 }")
 
-    --__addSimulatedDevice("{\
-  \"id\": 237,\
-  \"name\": \"237\",\
-  \"roomID\": 219,\
-  \"view\": [],\
-  \"type\": \"com.fibaro.zigbeeDevice\",\
-  \"baseType\": \"com.fibaro.device\",\
-  \"enabled\": true,\
-  \"visible\": false,\
-  \"isPlugin\": false,\
-  \"parentId\": 8,\
-  \"viewXml\": false,\
-  \"hasUIView\": false,\
-  \"configXml\": false,\
-  \"interfaces\": [\
-    \"zigbee\"\
-  ],\
-  \"properties\": {\
-    \"categories\": [\
-      \"other\"\
-    ],\
-    \"configured\": true,\
-    \"dead\": true,\
-    \"deadReason\": \"\",\
-    \"deviceControlType\": 1,\
-    \"deviceIcon\": 28,\
-    \"deviceRole\": \"Other\",\
-    \"deviceState\": \"Configured\",\
-    \"icon\": {},\
-    \"ieeeAddress\": \"0x84FD27EEEEEEE05E\",\
-    \"log\": \"\",\
-    \"logTemp\": \"\",\
-    \"manufacturer\": \"Ajax Online\",\
-    \"model\": \"AJ_ZB_GU10\",\
-    \"networkAddress\": 12761,\
-    \"saveLogs\": true,\
-    \"supportedDeviceRoles\": [\
-      \"Other\"\
-    ],\
-    \"userDescription\": \"\",\
-    \"zigbeeDeviceIds\": \"13,97\"\
-  },\
-  \"actions\": {},\
-  \"created\": 1656669191,\
-  \"modified\": 1673281514,\
-  \"sortOrder\": 110\
-}")
-    --__addSimulatedDevice("{\
-  \"id\": 238,\
-  \"name\": \"Nightlight RGB\",\
-  \"roomID\": 230,\
-  \"view\": [\
-    {\
-      \"assetsPath\": \"\",\
-      \"name\": \"com.fibaro.colorController\",\
-      \"translatesPath\": \"/assets/i18n/com.fibaro.colorController\",\
-      \"type\": \"ts\"\
-    }\
-  ],\
-  \"type\": \"com.fibaro.FGRGBW442CC\",\
-  \"baseType\": \"com.fibaro.colorController\",\
-  \"enabled\": true,\
-  \"visible\": true,\
-  \"isPlugin\": false,\
-  \"parentId\": 237,\
-  \"viewXml\": false,\
-  \"hasUIView\": false,\
-  \"configXml\": false,\
-  \"interfaces\": [\
-    \"light\",\
-    \"zigbee\"\
-  ],\
-  \"properties\": {\
-    \"categories\": [\
-      \"lights\"\
-    ],\
-    \"color\": \"208.0336600431721,0,254.99999999999997,0\",\
-    \"colorComponents\": {},\
-    \"configured\": true,\
-    \"currentProgram\": 0,\
-    \"currentProgramID\": 0,\
-    \"dead\": false,\
-    \"deadReason\": \"\",\
-    \"deviceControlType\": 51,\
-    \"deviceIcon\": 15,\
-    \"deviceRole\": \"Rgb\",\
-    \"icon\": {},\
-    \"ieeeAddress\": \"0x84FD27EEEEEEE05E\",\
-    \"isLight\": true,\
-    \"log\": \"\",\
-    \"logTemp\": \"\",\
-    \"manufacturer\": \"\",\
-    \"model\": \"\",\
-    \"networkAddress\": 12761,\
-    \"programsSortOrder\": \"1,2,3,4,5\",\
-    \"saveLogs\": true,\
-    \"state\": false,\
-    \"supportedDeviceRoles\": [\
-      \"Rgb\"\
-    ],\
-    \"userDescription\": \"\",\
-    \"value\": 0\
-  },\
-  \"actions\": {\
-    \"setColor\": 1,\
-    \"setColorComponents\": 1,\
-    \"setValue\": 1,\
-    \"startColorEnhancement\": 1,\
-    \"startColorFade\": 1,\
-    \"startProgram\": 1,\
-    \"stopColorChange\": 1,\
-    \"toggle\": 0,\
-    \"turnOff\": 0,\
-    \"turnOn\": 0\
-  },\
-  \"created\": 1656669192,\
-  \"modified\": 1674037508,\
-  \"sortOrder\": 111\
-}")
-    --__addSimulatedDevice"{\
-  \"id\": 46,\
-  \"name\": \"VR baie vitrée\",\
-  \"roomID\": 221,\
-  \"view\": [],\
-  \"type\": \"com.fibaro.device\",\
-  \"baseType\": \"\",\
-  \"enabled\": true,\
-  \"visible\": false,\
-  \"isPlugin\": false,\
-  \"parentId\": 7,\
-  \"viewXml\": false,\
-  \"hasUIView\": false,\
-  \"configXml\": false,\
-  \"interfaces\": [\
-    \"nice\",\
-    \"niceMono\"\
-  ],\
-  \"properties\": {\
-    \"buttonHold\": 5000,\
-    \"categories\": [\
-      \"other\"\
-    ],\
-    \"configuration\": true,\
-    \"dead\": false,\
-    \"deadReason\": \"\",\
-    \"deviceControlType\": 1,\
-    \"deviceIcon\": 28,\
-    \"deviceRole\": \"Other\",\
-    \"deviceState\": \"Configured\",\
-    \"icon\": {},\
-    \"inputToChannelMap\": {},\
-    \"log\": \"\",\
-    \"logTemp\": \"\",\
-    \"manufacturer\": \"NICE\",\
-    \"model\": \"\",\
-    \"niceId\": 13,\
-    \"niceProtocol\": \"Opera0\",\
-    \"numberOfSupportedButtons\": 8,\
-    \"saveLogs\": true,\
-    \"supportedDeviceRoles\": [\
-      \"Other\"\
-    ],\
-    \"userDescription\": \"\"\
-  },\
-  \"actions\": {},\
-  \"created\": 0,\
-  \"modified\": 1671310430,\
-  \"sortOrder\": 23\
-}")
-    --__addSimulatedDevice("{\
-  \"id\": 34,\
-  \"name\": \"VR baie vitrée\",\
-  \"roomID\": 221,\
-  \"view\": [\
-    {\
-      \"assetsPath\": \"dynamic-plugins/com.fibaro.remoteBaseShutter\",\
-      \"name\": \"com.fibaro.remoteBaseShutter\",\
-      \"translatesPath\": \"/assets/i18n/com.fibaro.remoteBaseShutter\",\
-      \"type\": \"ts\"\
-    },\
-    {\
-      \"assetsPath\": \"dynamic-plugins/favorite-positions\",\
-      \"name\": \"favorite-positions\",\
-      \"translatesPath\": \"/assets/i18n/favorite-positions\",\
-      \"type\": \"ts\"\
-    }\
-  ],\
-  \"type\": \"com.fibaro.remoteBaseShutter\",\
-  \"baseType\": \"com.fibaro.remoteController\",\
-  \"enabled\": true,\
-  \"visible\": true,\
-  \"isPlugin\": false,\
-  \"parentId\": 46,\
-  \"viewXml\": false,\
-  \"hasUIView\": true,\
-  \"configXml\": false,\
-  \"interfaces\": [\
-    \"favoritePosition\",\
-    \"nice\",\
-    \"niceMono\"\
-  ],\
-  \"properties\": {\
-    \"buttonHold\": 5000,\
-    \"categories\": [\
-      \"remotes\"\
-    ],\
-    \"configuration\": true,\
-    \"dead\": false,\
-    \"deadReason\": \"\",\
-    \"deviceControlType\": 53,\
-    \"deviceIcon\": 218,\
-    \"deviceRole\": \"BlindsWithoutPositioning\",\
-    \"deviceState\": \"Configured\",\
-    \"favoritePositions\": [\
-      {\
-        \"label\": \"Favorite position 1\",\
-        \"name\": \"FavoritePosition1\",\
-        \"value\": 50\
-      }\
-    ],\
-    \"favoritePositionsNativeSupport\": true,\
-    \"icon\": {\
-      \"path\": \"/assets/icon/fibaro/com.fibaro.remoteBaseShutter_garage/com.fibaro.remoteBaseShutter_garage.png\",\
-      \"source\": \"HC\"\
-    },\
-    \"inputToChannelMap\": {\
-      \"close\": [\
-        3\
-      ],\
-      \"open\": [\
-        1\
-      ],\
-      \"partialOpen1\": [],\
-      \"step\": [],\
-      \"stop\": [\
-        2\
-      ],\
-      \"toggleCh1\": [],\
-      \"toggleCh2\": [],\
-      \"turnOffCh1\": [],\
-      \"turnOffCh2\": [],\
-      \"turnOnCh1\": [],\
-      \"turnOnCh2\": [],\
-      \"unsupported\": []\
-    },\
-    \"log\": \"\",\
-    \"logTemp\": \"\",\
-    \"manufacturer\": \"NICE\",\
-    \"model\": \"\",\
-    \"niceId\": 13,\
-    \"niceProtocol\": \"Opera0\",\
-    \"numberOfSupportedButtons\": 8,\
-    \"saveLogs\": true,\
-    \"supportedDeviceRoles\": [\
-      \"BlindsWithoutPositioning\",\
-      \"VenetianBlinds\",\
-      \"Awning\"\
-    ],\
-    \"userDescription\": \"\"\
-  },\
-  \"actions\": {\
-    \"close\": 0,\
-    \"open\": 0,\
-    \"setFavoritePosition\": 1,\
-    \"stop\": 0\
-  },\
-  \"created\": 1649487581,\
-  \"modified\": 1671310429,\
-  \"sortOrder\": 15\
-}")
-
 end
 
 function __addSimulatedDevice(fibaroDeviceJsonStr)
@@ -903,7 +634,7 @@ function __addSimulatedDevice(fibaroDeviceJsonStr)
     filteredFibaroDevicesAmount = #__filteredFibaroDeviceIds
 end
 
------------ CREATE POWER, ENERGY & BATTERLY LEVEL SENSORS INSTEAD OF RELYING ON ATTRIBUTES WITHIN A SINGLE DEVICE
+----------- CREATE POWER, ENERGY & BATTERY LEVEL SENSORS INSTEAD OF RELYING ON ATTRIBUTES WITHIN A SINGLE DEVICE
 function __checkAndAppendLinkedDevices(fibaroDevice)
 
     -- Does device support energy monitoring? Create a dedicated sensor for Home Assistant
@@ -1002,14 +733,21 @@ end
 
 function removeDeviceNodeFromHierarchyById(id)
     local deviceNode = deviceNodeById[id]
-    
+
+    if not deviceNode then
+        if __logger then
+            __logger:warning("removeDeviceNodeFromHierarchyById: unknown device id " .. tostring(id))
+        end
+        return
+    end
+
     local parentNode = deviceNode.parentNode
     local sourceListForDeviceNode
-    
+
     if parentNode then
         sourceListForDeviceNode = parentNode.childNodeList
     else
-        sourceListForDeviceNode = deviceHierarchy
+        sourceListForDeviceNode = deviceHierarchyRootNode.childNodeList
     end
 
     local ind = table.indexOf(sourceListForDeviceNode, deviceNode)
@@ -1026,15 +764,21 @@ end
 function createAndAddDeviceNodeToHierarchyById(id)
     local fibaroDevice = api.get("/devices/" .. id)
 
-    local status, deviceFilterById = pcall(clone, deviceFilter)
+    local cloneOk, deviceFilterById = pcall(clone, deviceFilter)
+    if not cloneOk or not deviceFilterById then
+        if __logger then
+            __logger:warning("createAndAddDeviceNodeToHierarchyById: failed to clone deviceFilter, falling back to deviceID-only filter")
+        end
+        deviceFilterById = { filters = {} }
+    end
     local filterOperands = deviceFilterById.filters
     filterOperands[#filterOperands + 1] = {
             filter = "deviceID",
             value = { id }
     }
-    
-    local filteredFibaroDeviceIds = api.post( 
-        "/devices/filter", 
+
+    local filteredFibaroDeviceIds = api.post(
+        "/devices/filter",
         deviceFilterById
     )
 
@@ -1126,7 +870,7 @@ function __identifyHaEntity(deviceNode)
         end
     end
 
-    return nul
+    return nil
 end
 
 function __identifyAndAppendHaDevice(deviceNode)
@@ -1150,17 +894,17 @@ function __identifyAndAppendHaDevice(deviceNode)
         -- IDENTIFY HARDWARE VERSION
         local zwaveHwVersion = fibaroDevice.properties.zwaveInfo
         if zwaveHwVersion then
-            zwaveInfoComponents = splitStringToNumbers(zwaveHwVersion, ",")
+            local zwaveInfoComponents = splitStringToNumbers(zwaveHwVersion, ",")
             if (#zwaveInfoComponents == 3) then
                 zwaveHwVersion = "Z-Wave type " .. zwaveInfoComponents[1] .. "; Z-Wave version " .. zwaveInfoComponents[2] .. "." .. zwaveInfoComponents[3]
             end
         end
         if zwaveHwVersion then
             haDevice.hw_version = zwaveHwVersion
-        else   
+        else
             haDevice.hw_version = "Z-Wave"
         end
-        
+
         -- IDENTIFY SOFTWARE VERSION
         if fibaroDevice.properties.zwaveCompany then
             haDevice.manufacturer = fibaroDevice.properties.zwaveCompany
@@ -1171,9 +915,9 @@ function __identifyAndAppendHaDevice(deviceNode)
     elseif fibaroDeviceHasInterface(fibaroDevice, "zigbee") then
         -- experimental, need hardware for testing
         if fibaroDevice.properties.zigbeeVersion then
-            haDevice.hw_version = "Zigbee"
-        else
             haDevice.hw_version = "Zigbee " .. tostring(fibaroDevice.properties.zigbeeVersion)
+        else
+            haDevice.hw_version = "Zigbee"
         end
     elseif fibaroDeviceHasInterface(fibaroDevice, "nice") then
         -- experimental, need hardware for testing
@@ -1241,7 +985,7 @@ function createLinkedFibaroDevice(fromDevice, newName, linkedProperty, linkedUni
         properties = {
             unit = linkedUnit
         },
-        comment = "This entity has been autogenerated by HC3 <-> Home Assistant bridge to adjust the data model difference between Fibaro HC3 and Home Assistant. Fibaro treats '" .. linkedProperty .. "' entity to be an attribute of #" .. fromDevice.id .. ". And Home Asisstant requires these to be two separate entities"
+        comment = "This entity has been autogenerated by HC3 <-> Home Assistant bridge to adjust the data model difference between Fibaro HC3 and Home Assistant. Fibaro treats '" .. linkedProperty .. "' entity to be an attribute of #" .. fromDevice.id .. ". Home Assistant requires these to be two separate entities"
     }
 
     return newFibaroLinkedDevice

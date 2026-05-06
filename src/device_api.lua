@@ -57,10 +57,7 @@ function PrototypeEntity:overrideCustomFibaroEventIfNeeded(event)
     return event
 end 
 
--- *** rename setProperty to process HA event
 function PrototypeEntity:setProperty(propertyName, params)
-    -- check if there is a custom property setter
-
     -- DEFAULT PROPERTY SETTER
     if propertyName == "state" then
         local value = params[1]
@@ -72,7 +69,7 @@ function PrototypeEntity:setProperty(propertyName, params)
             __logger:trace("Turn OFF for device #" .. self.id)
             fibaro.call(self.id, "turnOff")
         else
-            __logger:warning("Unexpected value: " .. json.encode(event))
+            __logger:warning("Unexpected value '" .. tostring(value) .. "' for state of device #" .. tostring(self.id))
         end
     elseif propertyName == "action" then
         __logger:trace("FUNCTION CALL: \"" .. params[1] .. "\", with NO PARAMS for device #" .. self.id)
@@ -208,7 +205,7 @@ end
 
 
 -----------------------------------
--- BINARY SENSOR (DOOR, MOTION, WATER LEAK, FIRE, SMORE SENSORSMULTILEVEL FOR TEMPERATURE, ETC)
+-- BINARY SENSOR (DOOR, MOTION, WATER LEAK, FIRE, SMOKE, ETC)
 -----------------------------------
 BinarySensor = inheritFrom(GenericSensor)
 BinarySensor.type = "binary_sensor"
@@ -240,7 +237,7 @@ function BinarySensor:init(fibaroDevice)
             --self.icon = "&#129003;" -- 🟫
             --self.icon = "&#129695;" -- 🪟
         else
-            __logger:warning("[BinarySensor.init] Unknown doow/window sensor " .. self.id .. " " .. self.name)
+            __logger:warning("[BinarySensor.init] Unknown door/window sensor " .. self.id .. " " .. self.name)
         end
     elseif self:fibaroDeviceTypeMatchesWith("com.fibaro.fireDetector") or self:fibaroDeviceTypeMatchesWith("com.fibaro.fireSensor") then
         self.subtype = "heat"
@@ -376,7 +373,7 @@ function Cover:overrideCustomFibaroEventIfNeeded(originalEvent)
             return createFibaroEventPayload(self.sourceDeviceNode.fibaroDevice, "state", Cover.stateOpen)
         elseif value == "Unknown" then
             __logger:warning("\"Unknown\" state for cover #" .. tostring(self.id) .. ". This doesn't necessary mean a problem, and the QuickApp will attempt to transmit cover's state based on \"position level\" instead")
-            return nil -- no event to be transmitted from Fibaro HC3 to Home Assistant, i.e. no need to spam HA when Fibaro device firmware lack proper state support and use our own heurostics with "position" field in below
+            return nil -- no event to be transmitted from Fibaro HC3 to Home Assistant, i.e. no need to spam HA when Fibaro device firmware lacks proper state support and we use our own heuristics with "position" field below
         else 
             __logger:warning("Unexpected \"" .. tostring(value) .. "\" cover's state for device #" .. tostring(self.id))
             return nil
@@ -385,7 +382,7 @@ function Cover:overrideCustomFibaroEventIfNeeded(originalEvent)
 
     if property == "value" then
         -- This is a workaround until Fibaro's firmware gets full support for "state" property
-        -- Description: When Fibaro's cover/shutter uses a position level - we need to generate an additional Open/Closed/etc events, as Fibaro's firmware often sends "Uknown" state
+        -- Description: When Fibaro's cover/shutter uses a position level - we need to generate an additional Open/Closed/etc events, as Fibaro's firmware often sends "Unknown" state
         local newStateEvent
         if value == 0 then
             -- generate additional event for indicating cover state

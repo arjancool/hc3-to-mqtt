@@ -1,1 +1,21 @@
 support-docs
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+
+# Python (build script)
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+
+# Local secrets (never commit credentials)
+*.local.json
+*.secret
+.env

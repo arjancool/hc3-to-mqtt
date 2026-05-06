@@ -21,8 +21,10 @@ Steps to reproduce the behavior like:
 [...]
 
 **Environment:**
- - QuickApp version [e.g. 1.0.221]
+ - QuickApp version [e.g. 1.0.235-fork-1]
  - Fibaro hardware: Home Center 3, Home Center Lite, etc
+ - MQTT broker (Mosquitto / Home Assistant MQTT add-on / other) and version
+ - Are you using `mqtt://` (plain) or `mqtts://` (TLS)?
  - Add screenshots if applicable
 
 **Attach QuickApp logs**
