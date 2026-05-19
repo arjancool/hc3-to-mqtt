@@ -31,6 +31,14 @@ function QuickApp:onInit()
     self:debug("Fork changes: Added heartbeat/alive MQTT message")
     self:debug("(!) IMPORTANT NOTE FOR THOSE USERS WHO USED THE QUICKAPP PRIOR TO 1.0.191 VERSION: Your Home Assistant dashboards and automations need to be reconfigured with new entity ids. This is a one-time effort that introduces a relatively \"small\" inconvenience for the greater good (a) introduce long-term stability so Home Assistant entity duplicates will not happen in certain scenarios (b) entity id namespaces are now synchronized between Fibaro and Home Assistant ecosystems")
 
+    -- Create optional variables with defaults if absent (avoids "Variable not found" warnings on every start)
+    if self:getVariable("heartbeatInterval") == "" then
+        self:setVariable("heartbeatInterval", tostring(DEFAULT_HEARTBEAT_INTERVAL))
+    end
+    if self:getVariable("heartbeatIncludeMeta") == "" then
+        self:setVariable("heartbeatIncludeMeta", "true")
+    end
+
     self:turnOn()
 end
 
@@ -695,4 +703,3 @@ function QuickApp:logDeviceNode(id)
 
     print("Children count : " .. tostring(#deviceNode.childNodeList))
 end
-
