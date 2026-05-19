@@ -3,9 +3,9 @@ Summary: Fork with heartbeat/alive MQTT message and sensor device_class fix
 
 Description:
 - Added periodic heartbeat/alive MQTT message on topic "homeassistant/hc3-heartbeat"
-  Configurable interval via QuickApp variable "heartbeatInterval" (default: 60 seconds)
+  Configurable interval via QuickApp variable "hbInterval" (default: 60 seconds)
   Payload includes: status, timestamp, uptime, version, device/entity count, IP address
-  IP/version disclosure can be disabled via QuickApp variable "heartbeatIncludeMeta=false"
+  IP/version disclosure can be disabled via QuickApp variable "hbIncludeMeta=false"
 - Fixed device_class mapping for sensors based on unit (A, V, W, kWh, Wh, °C, lx, %)
   (based on Eroi69's fork)
 - Added state_class "measurement" for non-energy sensors
@@ -32,11 +32,11 @@ function QuickApp:onInit()
     self:debug("(!) IMPORTANT NOTE FOR THOSE USERS WHO USED THE QUICKAPP PRIOR TO 1.0.191 VERSION: Your Home Assistant dashboards and automations need to be reconfigured with new entity ids. This is a one-time effort that introduces a relatively \"small\" inconvenience for the greater good (a) introduce long-term stability so Home Assistant entity duplicates will not happen in certain scenarios (b) entity id namespaces are now synchronized between Fibaro and Home Assistant ecosystems")
 
     -- Create optional variables with defaults if absent (avoids "Variable not found" warnings on every start)
-    if self:getVariable("heartbeatInterval") == "" then
-        self:setVariable("heartbeatInterval", tostring(DEFAULT_HEARTBEAT_INTERVAL))
+    if self:getVariable("hbInterval") == "" then
+        self:setVariable("hbInterval", tostring(DEFAULT_HEARTBEAT_INTERVAL))
     end
-    if self:getVariable("heartbeatIncludeMeta") == "" then
-        self:setVariable("heartbeatIncludeMeta", "true")
+    if self:getVariable("hbIncludeMeta") == "" then
+        self:setVariable("hbIncludeMeta", "true")
     end
 
     self:turnOn()
@@ -210,10 +210,10 @@ end
     whether the HC3 bridge is alive and responsive.
 
     Topic: homeassistant/hc3-heartbeat
-    Interval: configurable via "heartbeatInterval" QuickApp variable (default: 60 seconds)
+    Interval: configurable via "hbInterval" QuickApp variable (default: 60 seconds)
 
     Optional QuickApp variables:
-    - heartbeatIncludeMeta = "false" to omit IP/version/device counts (privacy)
+    - hbIncludeMeta = "false" to omit IP/version/device counts (privacy)
 
     Payload example (with meta):
     {
@@ -240,17 +240,17 @@ function QuickApp:scheduleHeartbeat(generation)
     end
 
     -- Read configurable interval; reject non-positive values
-    local rawInterval = self:getVariable("heartbeatInterval")
+    local rawInterval = self:getVariable("hbInterval")
     local heartbeatInterval = tonumber(rawInterval)
     if (not heartbeatInterval) or heartbeatInterval <= 0 then
         if isNotEmptyString(rawInterval) then
-            self:warning("Invalid heartbeatInterval '" .. tostring(rawInterval) .. "' - falling back to default " .. DEFAULT_HEARTBEAT_INTERVAL .. "s")
+            self:warning("Invalid hbInterval '" .. tostring(rawInterval) .. "' - falling back to default " .. DEFAULT_HEARTBEAT_INTERVAL .. "s")
         end
         heartbeatInterval = DEFAULT_HEARTBEAT_INTERVAL
     end
 
     -- Build heartbeat payload. Meta (IP/version/counts) can be opted out.
-    local includeMeta = self:getVariable("heartbeatIncludeMeta")
+    local includeMeta = self:getVariable("hbIncludeMeta")
     local payloadTable = {
         status = "online",
         timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ"),
