@@ -79,13 +79,15 @@ $releasePayload = @{
     body       = $ReleaseBody
     draft      = $false
     prerelease = $false
-} | ConvertTo-Json -Depth 5
+}
+$releaseJson = $releasePayload | ConvertTo-Json -Depth 5
+$releaseBytes = [System.Text.Encoding]::UTF8.GetBytes($releaseJson)
 
 $releaseResponse = Invoke-RestMethod `
     -Uri "https://api.github.com/repos/$Owner/$Repo/releases" `
     -Method POST `
     -Headers ($authHeader + @{ "Content-Type" = "application/json" }) `
-    -Body $releasePayload
+    -Body $releaseBytes
 
 Write-Host "  Release URL: $($releaseResponse.html_url)" -ForegroundColor Green
 
