@@ -212,6 +212,9 @@ end
     Topic: homeassistant/hc3-heartbeat
     Interval: configurable via "hbInterval" QuickApp variable (default: 60 seconds)
 
+    Each heartbeat also re-publishes "online" on the retained availability
+    topic (homeassistant/hc3-status), see refreshAvailability().
+
     Optional QuickApp variables:
     - hbIncludeMeta = "false" to omit IP/version/device counts (privacy)
 
@@ -270,6 +273,18 @@ function QuickApp:scheduleHeartbeat(generation)
         self:warning("Heartbeat publish failed: " .. tostring(err))
     else
         self:trace("Heartbeat published (next in " .. heartbeatInterval .. "s)")
+    end
+
+    -- Re-assert availability ("online" on homeassistant/hc3-status) so a stale
+    -- retained "offline" from another bridge instance cannot keep entities
+    -- unavailable. Separate pcall: a failure here must not stop the heartbeat.
+    for _, mqttConvention in ipairs(self.mqttConventions) do
+        local refreshed, refreshErr = pcall(function()
+            mqttConvention:refreshAvailability()
+        end)
+        if not refreshed then
+            self:warning("Availability refresh failed for " .. tostring(mqttConvention.type) .. ": " .. tostring(refreshErr))
+        end
     end
 
     -- Schedule next heartbeat in same generation

@@ -8,6 +8,12 @@ this project loosely follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Fixed
+- **Entities stuck on "unavailable" after another bridge went offline**: the
+  availability topic `homeassistant/hc3-status` is retained and shared. When a
+  second bridge instance was removed, its `offline` overwrote ours and every
+  entity stayed unavailable until this QuickApp reconnected. Each heartbeat now
+  re-publishes `online` on that topic, so the bridge recovers by itself within
+  one `hbInterval`.
 - **Heartbeat interval QuickApp variable**: code now reads `heartbeatInterval`
   (matching the README) instead of the previously-broken `hbinterval`. Existing
   installs that already set `heartbeatInterval` start working immediately;

@@ -31,6 +31,11 @@ function MqttConventionPrototype:onDisconnected()
     error("function is mandatory for implementation")
 end
 
+-- Called with every heartbeat. Conventions that use a retained availability
+-- topic re-publish "online" here; the default does nothing.
+function MqttConventionPrototype:refreshAvailability()
+end
+
 -----------------------------------
 -- HOME ASSISTANT 
 -----------------------------------
@@ -97,6 +102,15 @@ end
 
 function MqttConventionHomeAssistant:onDisconnected()
     self.mqtt:publish(self:getLastWillAvailabilityTopic(), "offline", {retain = true})
+end
+
+-- The availability topic is retained and shared by every bridge that uses this
+-- root topic. If another bridge instance is removed or disconnects, its
+-- "offline" (or last will) overwrites ours and all entities become
+-- unavailable until we reconnect. Re-publishing "online" with each heartbeat
+-- makes the bridge recover from that on its own within one interval.
+function MqttConventionHomeAssistant:refreshAvailability()
+    self.mqtt:publish(self:getLastWillAvailabilityTopic(), "online", {retain = true})
 end
 
 function MqttConventionHomeAssistant:onDeviceNodeCreated(deviceNode)
