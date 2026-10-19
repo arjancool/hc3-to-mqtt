@@ -39,6 +39,7 @@ local devices = {
       actions = {} },
 }
 
+fibaroCalls = {}
 json = { encode = function(t) return dk.encode(t) end, decode = function(s) return dk.decode(s) end }
 unpack = table.unpack
 plugin = { mainDeviceId = 999 }
@@ -59,7 +60,7 @@ fibaro = {
     getRoomNameByDeviceID = function() return "Living room" end,
     getGlobalVariable = function() return nil end,
     setTimeout = function() end,
-    call = function() end,
+    call = function(id, action, ...) fibaroCalls[#fibaroCalls + 1] = { id = id, action = action, args = {...} } end,
 }
 net = { HTTPClient = function() return { request = function() end } end }
 mqtt = { Client = { connect = function() return { addEventListener = function() end } end } }
@@ -176,6 +177,28 @@ fired = dispatch({ type = "SceneActivationEvent", data = { id = 172, sceneId = 1
 check(#fired == 1 and fired[1] == "button_1/button_long_press", "scene 12 (not in availableScenes) fires button_1/button_long_press")
 fired = dispatch({ type = "SceneActivationEvent", data = { id = 172, sceneId = 23 } })
 check(#fired == 1 and fired[1] == "button_2/button_long_release", "scene 23 fires button_2/button_long_release")
+
+-- Commands from Home Assistant ----------------------------------------------
+local commandTopic = "homeassistant/light/226/events/home assistant => fibaro/state"
+local function command(payload, retain)
+    fibaroCalls = {}
+    local before = #published
+    qa:onMessage({ topic = commandTopic, payload = payload, retain = retain })
+    local republished = {}
+    for i = before + 1, #published do republished[#republished + 1] = published[i] end
+    return fibaroCalls, republished
+end
+
+local calls, republished = command("true", false)
+check(#calls == 1 and calls[1].id == 226 and calls[1].action == "turnOn", "live 'true' command turns device #226 on")
+
+calls, republished = command("true", true)
+check(#calls == 0, "retained command (replayed on reconnect) is not executed")
+check(#republished == 1 and republished[1].topic == commandTopic and republished[1].payload == "" and republished[1].retain == true,
+    "retained command is cleared from the broker")
+
+calls = command("", false)
+check(#calls == 0, "empty payload (the clearing message) is not executed")
 
 -- MQTT convention selection -------------------------------------------------
 for _, case in ipairs({

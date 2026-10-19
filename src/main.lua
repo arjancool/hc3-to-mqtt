@@ -1,7 +1,11 @@
---[[ RELEASE NOTES FOR 1.0.235-fork-4
-Summary: Remote/switch sensors show key presses again; hold/release triggers for Scene Activation
+--[[ RELEASE NOTES FOR 1.0.235-fork-5
+Summary: Retained MQTT commands are ignored and cleared
 
 Description:
+- A retained command was replayed on every (re)connect and switched devices on again;
+  it is now ignored and removed from the broker
+
+Earlier fork changes (1.0.235-fork-4):
 - Remote controller sensors no longer get state_class "measurement" (HA rejected their text state)
 - state_class only for numeric sensors, not binary sensors
 - Hold/release triggers for every Fibaro Scene Activation input
@@ -27,7 +31,7 @@ Earlier fork changes (1.0.235-fork-1):
 - Forked from alexander-vitishchenko/hc3-to-mqtt v1.0.235
 ]]--
 
-local QUICKAPP_VERSION = "1.0.235-fork-4"
+local QUICKAPP_VERSION = "1.0.235-fork-5"
 local DEFAULT_HEARTBEAT_INTERVAL = 60
 local DEFAULT_RECONNECT_DELAY_MS = 10000
 local DEFAULT_KEEPALIVE = 60
@@ -194,6 +198,18 @@ function QuickApp:scheduleReconnectToMqtt()
 end
 
 function QuickApp:onMessage(event)
+    -- A retained command is replayed by the broker on every (re)connect and would
+    -- switch the device again each time; drop it and clear it from the broker
+    if event.retain then
+        self:warning("Ignoring retained MQTT command on '" .. tostring(event.topic) .. "' (payload '" .. tostring(event.payload) .. "') and removing it from the broker")
+        self.mqtt:publish(event.topic, "", {retain = true})
+        return
+    end
+    -- Empty payloads are what clearing a retained message looks like; not a command
+    if isEmptyString(event.payload) then
+        return
+    end
+
     for i, j in ipairs(self.mqttConventions) do
         j:onHomeAssistantEvent(event)
     end
@@ -240,7 +256,7 @@ end
         "status": "online",
         "timestamp": "2025-01-15T14:30:00Z",
         "uptime": 3600,
-        "version": "1.0.235-fork-4",
+        "version": "1.0.235-fork-5",
         "devices": 42,
         "entities": 58,
         "ip": "192.168.1.100"

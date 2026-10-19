@@ -7,6 +7,15 @@ this project loosely follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.0.235-fork-5] - 2026-10-19
+
+### Fixed
+- **Devices switched on at every bridge (re)start**: a retained command on a
+  `…/events/home assistant => fibaro/…` topic was replayed by the broker on
+  every connect and executed again (seen with `-1.05 Lamp` and `1.06 Lamp`).
+  Retained commands are now ignored, logged as a warning and cleared from the
+  broker; empty payloads (the clearing message) are not executed.
+
 ## [1.0.235-fork-4] - 2026-10-19
 
 ### Added
