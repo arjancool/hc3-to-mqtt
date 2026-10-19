@@ -348,3 +348,19 @@ function sanitizeMqttUrl(url)
     if not url then return "<nil>" end
     return string.gsub(tostring(url), "(://)([^@/]+)@", "%1***:***@")
 end
+
+-- Canonical text for a central scene key id ("1" for 1 or 1.0), so ids built
+-- from device metadata and from live events always compare equal.
+function normalizeSceneKeyId(keyId)
+    local numericKeyId = tonumber(keyId)
+    if numericKeyId and numericKeyId == math.floor(numericKeyId) then
+        return string.format("%d", numericKeyId)
+    end
+    return tostring(keyId)
+end
+
+-- Identifier of one (button, press type) combination, e.g. "1-pressed2".
+-- Shared by the MQTT scene event payload and the Home Assistant trigger discovery.
+function centralSceneTriggerId(keyId, keyAttribute)
+    return normalizeSceneKeyId(keyId) .. "-" .. string.lower(tostring(keyAttribute))
+end

@@ -7,18 +7,43 @@ this project loosely follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.0.235-fork-2] - 2026-10-19
+
+### Added
+- **S1/S2 switch inputs as Home Assistant device triggers**: every included
+  device with central scene support (dimmers and relays such as FGD-212,
+  FGS-213, FGS-223, not only remote controllers) gets a device trigger per
+  button and press type. Scene events on `homeassistant/event/<id>` now carry a
+  `trigger` field (e.g. `"1-pressed2"`) that these triggers match on.
+
 ### Fixed
+- **Crash when `mqttConvention` is empty or unknown**: the default convention
+  was stored at index 0, which the code never reads. It now falls back to Home
+  Assistant and warns about unknown names.
+- **Remote controller triggers never fired**: they listened on a topic nothing
+  published to. All button triggers now listen on `homeassistant/event/<id>`.
+- **Remote controller sensor stopped showing key presses** since scene events
+  were only published to `homeassistant/event/<id>`. Remote controllers update
+  their sensor again; dimmers still don't, so a press can't overwrite their
+  brightness.
+- **Central scene events of included devices without an own entity** were
+  dropped; they are now forwarded too.
+- **Linked entities of newly added or modified devices** (energy, power and
+  battery sensors, button triggers) were only announced to Home Assistant after
+  a QuickApp restart; they are now published right away.
 - **Entities stuck on "unavailable" after another bridge went offline**: the
   availability topic `homeassistant/hc3-status` is retained and shared. When a
   second bridge instance was removed, its `offline` overwrote ours and every
   entity stayed unavailable until this QuickApp reconnected. Each heartbeat now
   re-publishes `online` on that topic, so the bridge recovers by itself within
   one `hbInterval`.
-- **Heartbeat interval QuickApp variable**: code now reads `heartbeatInterval`
-  (matching the README) instead of the previously-broken `hbinterval`. Existing
-  installs that already set `heartbeatInterval` start working immediately;
-  installs that worked around the bug by setting `hbinterval` need to rename
-  the variable.
+## [1.0.235-fork-1]
+
+### Fixed
+- **Heartbeat interval QuickApp variable**: code and README now agree on the
+  variable name `hbInterval` (and `hbIncludeMeta`); previously the code read
+  `hbinterval` while the README documented `heartbeatInterval`. Both variables
+  are created with defaults on first start.
 - **`return nul` typo** in `device_helper.lua` (`__identifyHaEntity`) replaced
   with `return nil`.
 - **Undefined `deviceHierarchy` reference** in
@@ -81,13 +106,11 @@ this project loosely follows [Semantic Versioning](https://semver.org/).
   `scripts/build_fqa.py`. The previously-committed `.fqa` was out of sync
   with `src/`; that has been corrected.
 
-## [1.0.235-fork-1]
-
-### Added
+### Added (initial fork)
 - Periodic heartbeat/alive MQTT message on `homeassistant/hc3-heartbeat`.
 - Sensor `device_class` mapping based on unit of measurement (A, V, W, kWh,
   Wh, °C/°F, lx, %), based on Eroi69's fix.
 - `state_class = measurement` for non-energy sensors.
 
-### Forked from
+### Forked from (initial fork)
 - alexander-vitishchenko/hc3-to-mqtt v1.0.235.

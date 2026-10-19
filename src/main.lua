@@ -1,7 +1,13 @@
---[[ RELEASE NOTES FOR 1.0.235-fork-1
-Summary: Fork with heartbeat/alive MQTT message and sensor device_class fix
+--[[ RELEASE NOTES FOR 1.0.235-fork-2
+Summary: S1/S2 switch inputs and remote buttons as Home Assistant device triggers
 
 Description:
+- Device triggers per button and press type for every device with central scene
+  support (dimmers/relays such as FGD-212, FGS-213, FGS-223, and remote controllers)
+- Remote controller triggers and key-press sensor work again
+- Fixed crash when "mqttConvention" is empty or unknown
+
+Earlier fork changes (1.0.235-fork-1):
 - Added periodic heartbeat/alive MQTT message on topic "homeassistant/hc3-heartbeat"
   Configurable interval via QuickApp variable "hbInterval" (default: 60 seconds)
   Payload includes: status, timestamp, uptime, version, device/entity count, IP address
@@ -12,7 +18,7 @@ Description:
 - Forked from alexander-vitishchenko/hc3-to-mqtt v1.0.235
 ]]--
 
-local QUICKAPP_VERSION = "1.0.235-fork-1"
+local QUICKAPP_VERSION = "1.0.235-fork-2"
 local DEFAULT_HEARTBEAT_INTERVAL = 60
 local DEFAULT_RECONNECT_DELAY_MS = 10000
 local DEFAULT_KEEPALIVE = 60
@@ -28,7 +34,7 @@ function QuickApp:onInit()
     self:debug("")
     self:debug("------- HC3 <-> MQTT BRIDGE")
     self:debug("Version: " .. QUICKAPP_VERSION)
-    self:debug("Fork changes: Added heartbeat/alive MQTT message")
+    self:debug("Fork changes: heartbeat/alive MQTT message, S1/S2 and remote buttons as device triggers")
     self:debug("(!) IMPORTANT NOTE FOR THOSE USERS WHO USED THE QUICKAPP PRIOR TO 1.0.191 VERSION: Your Home Assistant dashboards and automations need to be reconfigured with new entity ids. This is a one-time effort that introduces a relatively \"small\" inconvenience for the greater good (a) introduce long-term stability so Home Assistant entity duplicates will not happen in certain scenarios (b) entity id namespaces are now synchronized between Fibaro and Home Assistant ecosystems")
 
     -- Create optional variables with defaults if absent (avoids "Variable not found" warnings on every start)
@@ -54,16 +60,18 @@ function QuickApp:establishMqttConnection()
     -- IDENTIFY WHICH MQTT CONVENTIONS TO BE USED (e.g. Home Assistant, Homio, etc)
     self.mqttConventions = { }
     local mqttConventionStr = self:getVariable("mqttConvention")
-    if (isEmptyString(mqttConventionStr)) then
-        self.mqttConventions[0] = MqttConventionHomeAssistant
-    else
-        local arr = splitString(mqttConventionStr, ",")
-        for i, j in ipairs(arr) do
-            local convention = mqttConventionMappings[j]
+    if (isNotEmptyString(mqttConventionStr)) then
+        for _, conventionName in ipairs(splitString(mqttConventionStr, ",")) do
+            local convention = mqttConventionMappings[conventionName]
             if (convention) then
-                self.mqttConventions[i] = clone(convention)
+                table.insert(self.mqttConventions, clone(convention))
+            else
+                self:warning("Unknown mqttConvention '" .. conventionName .. "' ignored")
             end
         end
+    end
+    if (#self.mqttConventions == 0) then
+        table.insert(self.mqttConventions, clone(MqttConventionHomeAssistant))
     end
 
     local mqttConnectionParameters = self:getMqttConnectionParameters()
@@ -223,7 +231,7 @@ end
         "status": "online",
         "timestamp": "2025-01-15T14:30:00Z",
         "uptime": 3600,
-        "version": "1.0.235-fork-1",
+        "version": "1.0.235-fork-2",
         "devices": 42,
         "entities": 58,
         "ip": "192.168.1.100"
@@ -513,30 +521,16 @@ function QuickApp:dispatchFibaroEventToMqtt(event)
         -- process events for devices that are required to be known to the QuickApp 
         if deviceNode.included then
             -- process events for devices that are included by user filter criteria
+
+            -- Button presses are forwarded even for devices without an own HA entity
+            if (eventType == "CentralSceneEvent") then
+                return self:dispatchCentralSceneEvent(deviceNode, event)
+            end
+
             local haEntity = deviceNode.identifiedHaEntity
             if haEntity then
                 if (eventType == "DevicePropertyUpdatedEvent") then
-                    return self:dispatchDevicePropertyUpdatedEvent(deviceNode, event) 
-                elseif (eventType == "CentralSceneEvent") then
-                    local keyId = event.data.keyId
-                    local keyAttr = string.lower(event.data.keyAttribute)
-
-                    self:debug("Scene Event: button " .. tostring(keyId) .. " action: " .. tostring(keyAttr))
-
-                    -- Publish a discrete scene event for Home Assistant on a per-device topic.
-                    -- Topic: homeassistant/event/<DEVICE_ID>
-                    local scenePayload = json.encode({
-                        event_type = "central_scene",
-                        device_id = fibaroDeviceId,
-                        button = keyId,
-                        action = keyAttr
-                    })
-
-                    self.mqtt:publish("homeassistant/event/" .. fibaroDeviceId, scenePayload, {retain = false})
-
-                    -- Don't fall through to property-update logic for scene events
-                    return
-
+                    return self:dispatchDevicePropertyUpdatedEvent(deviceNode, event)
                 elseif (eventType == "DeviceModifiedEvent") then
                     -- Fibaro generates "DeviceModifiedEvent" event after "DeviceCreatedEvent" => filter out the redundant event
                     local deviceLastCreationTimestamp = deviceCreatedEventTimestamps[fibaroDeviceId]
@@ -631,16 +625,37 @@ function QuickApp:rememberLastMqttCommandTime(deviceId)
     self.lastMqttCommandTime[deviceId] = os.time()
 end
 
+-- S1/S2 inputs of dimmers/relays and remote controller keys send one
+-- CentralSceneEvent per press (pressed, pressed2, helddown, released, ...).
+function QuickApp:dispatchCentralSceneEvent(deviceNode, event)
+    local keyId = event.data.keyId
+    local keyAttribute = event.data.keyAttribute
+    if (keyId == nil) or (keyAttribute == nil) then
+        self:debug("Ignoring CentralSceneEvent without keyId/keyAttribute: " .. json.encode(event))
+        return
+    end
+
+    self:debug("Scene event: device #" .. tostring(deviceNode.id) .. " button " .. centralSceneTriggerId(keyId, keyAttribute))
+
+    for _, mqttConvention in ipairs(self.mqttConventions) do
+        mqttConvention:onCentralSceneEvent(deviceNode, keyId, keyAttribute)
+    end
+
+    -- A remote controller also shows its last key press as sensor value. Never do
+    -- this for other devices: a dimmer's "value" is its brightness.
+    local haEntity = deviceNode.identifiedHaEntity
+    if haEntity and (haEntity.type == RemoteController.type) and (haEntity.subtype == RemoteController.subtype) then
+        self:simulatePropertyUpdate(deviceNode.fibaroDevice, "value", normalizeSceneKeyId(keyId) .. "," .. string.lower(tostring(keyAttribute)))
+    end
+end
+
 function QuickApp:dispatchDeviceCreatedEvent(fibaroDeviceId)
     local newDeviceNode = createAndAddDeviceNodeToHierarchyById(fibaroDeviceId)
 
     if (newDeviceNode.included and newDeviceNode.identifiedHaEntity) then
         self:debug("Fibaro device " .. newDeviceNode.id .. " added")
-        for i, j in ipairs(self.mqttConventions) do
-            j:onDeviceNodeCreated(newDeviceNode)
-        end
-        
-        self:__publishDeviceProperties(newDeviceNode.fibaroDevice)
+        -- also publishes linked children (energy/power/battery sensors, button triggers)
+        self:publishDeviceNodeToMqtt(newDeviceNode)
 
         printDeviceNodeHierarchy(newDeviceNode, 1)
     else

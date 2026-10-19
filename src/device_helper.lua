@@ -658,15 +658,15 @@ function __checkAndAppendLinkedDevices(fibaroDevice)
         appendNodeByFibaroDevice(sensor, true)
     end
 
-    -- Is it a "Remote Control" device? Created dedicated devices for each combination of Button and Press Type
-    --if (device.type == RemoteController.type and device.subtype == RemoteController.subtype) then
-    if (RemoteController.isSupported(fibaroDevice)) then
-        if fibaroDevice.properties.centralSceneSupport then
-            for _, i in ipairs(fibaroDevice.properties.centralSceneSupport) do
-                for _, j in ipairs(i.keyAttributes) do
-                    local sensor = createLinkedKey(fibaroDevice, i.keyId, j)
-
-                    appendNodeByFibaroDevice(sensor, true)
+    -- Physical buttons report presses as central scenes: remote controller keys,
+    -- but also the S1/S2 inputs of dimmers and relays. Create one Home Assistant
+    -- device trigger per combination of button and press type.
+    local centralSceneSupport = fibaroDevice.properties.centralSceneSupport
+    if type(centralSceneSupport) == "table" then
+        for _, scene in ipairs(centralSceneSupport) do
+            if scene.keyId ~= nil and type(scene.keyAttributes) == "table" then
+                for _, keyAttribute in ipairs(scene.keyAttributes) do
+                    appendNodeByFibaroDevice(createLinkedKey(fibaroDevice, scene.keyId, keyAttribute), true)
                 end
             end
         end
@@ -958,17 +958,16 @@ function createLinkedMultilevelSensorDevice(fromDevice, linkedProperty)
 end
 
 function createLinkedKey(fromDevice, keyId, keyAttribute)
-    local keyAttribute = string.lower(keyAttribute)
+    local attribute = string.lower(tostring(keyAttribute))
 
-    local action = keyId .. "-" .. keyAttribute
-    local newName = fromDevice.name .. " - " .. keyId .. " - " .. keyAttribute
+    local action = centralSceneTriggerId(keyId, attribute)
+    local newName = fromDevice.name .. " - " .. normalizeSceneKeyId(keyId) .. " - " .. attribute
 
-    --local newFibaroKey = createLinkedFibaroDevice(fromDevice, "value", nil)
     local newFibaroKey = createLinkedFibaroDevice(fromDevice, newName, action, nil)
     newFibaroKey.baseType = "com.alexander_vitishchenko.remoteKey"
     newFibaroKey.type = newFibaroKey.baseType
     newFibaroKey.keyId = keyId
-    newFibaroKey.keyAttribute = keyAttribute
+    newFibaroKey.keyAttribute = attribute
 
     return newFibaroKey
 end
