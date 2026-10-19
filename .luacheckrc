@@ -60,7 +60,7 @@ globals = {
     "getCompositeQuickAppVariable",
     "logWithoutRepetableWarnings",
     "sanitizeMqttUrl",
-    "normalizeSceneKeyId", "centralSceneTriggerId",
+    "normalizeSceneKeyId", "centralSceneTriggerId", "sceneActivationToKey",
     "cleanDeviceCache",
     "getDeviceHierarchyByFilter",
     "appendNodeByFibaroDevice",

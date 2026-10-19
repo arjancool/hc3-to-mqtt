@@ -364,3 +364,29 @@ end
 function centralSceneTriggerId(keyId, keyAttribute)
     return normalizeSceneKeyId(keyId) .. "-" .. string.lower(tostring(keyAttribute))
 end
+
+-- Fibaro dimmers/relays (FGD-212, FGS-2x3) send Scene Activation ids whose tens
+-- digit is the input (1 = S1, 2 = S2) and whose units digit is the action.
+local fibaroSceneActionByUnit = {
+    [0] = "turnon",
+    [1] = "turnoff",
+    [2] = "helddown",
+    [3] = "released",
+    [4] = "pressed2",
+    [5] = "pressed3",
+    [6] = "pressed",
+}
+
+-- Maps a Scene Activation id to a central scene (keyId, keyAttribute), so both
+-- kinds of button presses fire the same Home Assistant triggers. Ids outside the
+-- Fibaro scheme become their own button with a single "scene" action.
+function sceneActivationToKey(sceneId)
+    local id = tonumber(sceneId)
+    if id and id == math.floor(id) and id >= 10 and id <= 29 then
+        local action = fibaroSceneActionByUnit[id % 10]
+        if action then
+            return math.floor(id / 10), action
+        end
+    end
+    return sceneId, "scene"
+end

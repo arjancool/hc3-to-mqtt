@@ -1,7 +1,11 @@
---[[ RELEASE NOTES FOR 1.0.235-fork-2
-Summary: S1/S2 switch inputs and remote buttons as Home Assistant device triggers
+--[[ RELEASE NOTES FOR 1.0.235-fork-3
+Summary: S1/S2 triggers also for modules that use Scene Activation (e.g. FGD-212)
 
 Description:
+- Scene Activation ids (availableScenes, SceneActivationEvent, "sceneActivation"
+  property) are mapped to the same S1/S2 device triggers as Central Scene
+
+Earlier fork changes (1.0.235-fork-2):
 - Device triggers per button and press type for every device with central scene
   support (dimmers/relays such as FGD-212, FGS-213, FGS-223, and remote controllers)
 - Remote controller triggers and key-press sensor work again
@@ -18,7 +22,7 @@ Earlier fork changes (1.0.235-fork-1):
 - Forked from alexander-vitishchenko/hc3-to-mqtt v1.0.235
 ]]--
 
-local QUICKAPP_VERSION = "1.0.235-fork-2"
+local QUICKAPP_VERSION = "1.0.235-fork-3"
 local DEFAULT_HEARTBEAT_INTERVAL = 60
 local DEFAULT_RECONNECT_DELAY_MS = 10000
 local DEFAULT_KEEPALIVE = 60
@@ -231,7 +235,7 @@ end
         "status": "online",
         "timestamp": "2025-01-15T14:30:00Z",
         "uptime": 3600,
-        "version": "1.0.235-fork-2",
+        "version": "1.0.235-fork-3",
         "devices": 42,
         "entities": 58,
         "ip": "192.168.1.100"
@@ -525,6 +529,10 @@ function QuickApp:dispatchFibaroEventToMqtt(event)
             -- Button presses are forwarded even for devices without an own HA entity
             if (eventType == "CentralSceneEvent") then
                 return self:dispatchCentralSceneEvent(deviceNode, event)
+            elseif (eventType == "SceneActivationEvent") then
+                return self:dispatchSceneActivation(deviceNode, event.data.sceneId)
+            elseif (eventType == "DevicePropertyUpdatedEvent") and (event.data.property == "sceneActivation") then
+                return self:dispatchSceneActivation(deviceNode, event.data.newValue)
             end
 
             local haEntity = deviceNode.identifiedHaEntity
@@ -647,6 +655,45 @@ function QuickApp:dispatchCentralSceneEvent(deviceNode, event)
     if haEntity and (haEntity.type == RemoteController.type) and (haEntity.subtype == RemoteController.subtype) then
         self:simulatePropertyUpdate(deviceNode.fibaroDevice, "value", normalizeSceneKeyId(keyId) .. "," .. string.lower(tostring(keyAttribute)))
     end
+end
+
+-- The device that owns the Scene Activation triggers: the one with
+-- availableScenes, which on an FGD-212 is the "Switch" sibling of the dimmer.
+local function findSceneActivationNode(deviceNode)
+    if deviceNode.fibaroDevice.properties.availableScenes then
+        return deviceNode
+    end
+    if deviceNode.parentNode then
+        for _, sibling in ipairs(deviceNode.parentNode.childNodeList) do
+            if sibling.included and sibling.fibaroDevice.properties and sibling.fibaroDevice.properties.availableScenes then
+                return sibling
+            end
+        end
+    end
+    return deviceNode
+end
+
+-- Modules using Scene Activation (instead of Central Scene) report a press as a
+-- SceneActivationEvent and/or a "sceneActivation" property update, possibly on
+-- different devices. Both are mapped to the Central Scene keys; a press that
+-- arrives through both within a second is forwarded once.
+local lastSceneActivation = {}
+function QuickApp:dispatchSceneActivation(deviceNode, sceneId)
+    if sceneId == nil then
+        return
+    end
+
+    local targetNode = findSceneActivationNode(deviceNode)
+    local now = os.time()
+    local last = lastSceneActivation[targetNode.id]
+    if last and (last.sceneId == tostring(sceneId)) and (now - last.time <= 1) then
+        return
+    end
+    lastSceneActivation[targetNode.id] = { sceneId = tostring(sceneId), time = now }
+
+    local keyId, keyAttribute = sceneActivationToKey(sceneId)
+    self:debug("Scene activation " .. tostring(sceneId) .. " from device #" .. tostring(deviceNode.id))
+    return self:dispatchCentralSceneEvent(targetNode, { data = { keyId = keyId, keyAttribute = keyAttribute } })
 end
 
 function QuickApp:dispatchDeviceCreatedEvent(fibaroDeviceId)
