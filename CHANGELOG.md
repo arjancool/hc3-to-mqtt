@@ -7,6 +7,21 @@ this project loosely follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.0.235-fork-4] - 2026-10-19
+
+### Added
+- **Hold and release triggers for Scene Activation inputs**: the HC3 lists
+  only some scene ids in `availableScenes` (e.g. 16/14/26/24 on an FGD-212),
+  while the module also sends hold (12/22) and release (13/23). These triggers
+  are now created for every input that appears.
+
+### Fixed
+- **Remote controller sensors rejected every key press**: their discovery
+  carried `state_class: measurement`, so Home Assistant refused the text state
+  (e.g. `1-button_short_press`) and the sensor stayed `unavailable`. The
+  `state_class` is now only sent for numeric sensors, which also removes it
+  from binary sensors.
+
 ## [1.0.235-fork-3] - 2026-10-19
 
 ### Added

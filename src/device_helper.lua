@@ -674,11 +674,29 @@ function __checkAndAppendLinkedDevices(fibaroDevice)
     elseif type(availableScenes) == "table" then
         -- Modules using Scene Activation instead (e.g. FGD-212 on its "Switch"
         -- child: 16 = S1 click, 24 = S2 double click)
+        local keys, fibaroInputs = {}, {}
         for _, scene in ipairs(availableScenes) do
             if scene.sceneId ~= nil then
                 local keyId, keyAttribute = sceneActivationToKey(scene.sceneId)
-                appendNodeByFibaroDevice(createLinkedKey(fibaroDevice, keyId, keyAttribute), true)
+                keys[centralSceneTriggerId(keyId, keyAttribute)] = { keyId, keyAttribute }
+                if keyAttribute ~= "scene" then
+                    fibaroInputs[normalizeSceneKeyId(keyId)] = keyId
+                end
             end
+        end
+        -- The HC3 omits hold/release from availableScenes, but the module sends
+        -- them (e.g. 12/13 for S1)
+        for _, keyId in pairs(fibaroInputs) do
+            for _, keyAttribute in ipairs({"helddown", "released"}) do
+                keys[centralSceneTriggerId(keyId, keyAttribute)] = { keyId, keyAttribute }
+            end
+        end
+        local triggerIds = {}
+        for triggerId in pairs(keys) do triggerIds[#triggerIds + 1] = triggerId end
+        table.sort(triggerIds)
+        for _, triggerId in ipairs(triggerIds) do
+            local key = keys[triggerId]
+            appendNodeByFibaroDevice(createLinkedKey(fibaroDevice, key[1], key[2]), true)
         end
     end
 end

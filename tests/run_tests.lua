@@ -95,7 +95,15 @@ for _, m in ipairs(published) do
         triggers[#triggers + 1] = dk.decode(m.payload)
     end
 end
-check(#triggers == 12, "12 device triggers discovered (7 central scene dimmer, 4 scene activation, 1 remote), got " .. #triggers)
+check(#triggers == 16, "16 device triggers discovered (7 central scene dimmer, 4 scene activation + hold/release for S1 and S2, 1 remote), got " .. #triggers)
+
+-- HA rejects text states on sensors with a state_class
+for _, m in ipairs(published) do
+    local id = m.topic:match("^homeassistant/sensor/(%d+)/config$")
+    if id == "172" or id == "300" then
+        check(dk.decode(m.payload).state_class == nil, "remote sensor #" .. id .. " has no state_class")
+    end
+end
 for _, t in ipairs(triggers) do
     if not (t.device and t.device.identifiers) then check(false, "trigger " .. tostring(t.payload) .. " has device info") end
 end
@@ -163,6 +171,11 @@ local total = 0
 fired = dispatch({ type = "SceneActivationEvent", data = { id = 172, sceneId = 14 } }); total = total + #fired
 fired = dispatch({ type = "DevicePropertyUpdatedEvent", data = { id = 173, property = "sceneActivation", newValue = 14 } }); total = total + #fired
 check(total == 1, "the same press reported as event and as property update fires once (" .. total .. ")")
+
+fired = dispatch({ type = "SceneActivationEvent", data = { id = 172, sceneId = 12 } })
+check(#fired == 1 and fired[1] == "button_1/button_long_press", "scene 12 (not in availableScenes) fires button_1/button_long_press")
+fired = dispatch({ type = "SceneActivationEvent", data = { id = 172, sceneId = 23 } })
+check(#fired == 1 and fired[1] == "button_2/button_long_release", "scene 23 fires button_2/button_long_release")
 
 -- MQTT convention selection -------------------------------------------------
 for _, case in ipairs({
