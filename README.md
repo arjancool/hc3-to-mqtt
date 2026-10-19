@@ -6,7 +6,7 @@
 
 ## Contents
 
-- [Fork changes](#-fork-changes-v10235-fork-1)
+- [Fork changes](#-fork-changes-v10235-fork-2)
   - [Heartbeat / Alive message](#heartbeat--alive-message)
   - [Improved sensor device_class mapping](#improved-sensor-device_class-mapping)
   - [S1/S2 switch inputs and remote buttons as triggers](#s1s2-switch-inputs-and-remote-buttons-as-triggers)
@@ -16,7 +16,7 @@
 - [Security considerations](#security-considerations)
 - [Credits](#credits)
 
-## 🔀 Fork changes (v1.0.235-fork-1)
+## 🔀 Fork changes (v1.0.235-fork-2)
 
 ### Heartbeat / Alive message
 Publishes a periodic status message to MQTT so Home Assistant can monitor whether the HC3 bridge is alive and responsive.
@@ -29,7 +29,7 @@ Publishes a periodic status message to MQTT so Home Assistant can monitor whethe
     "status": "online",
     "timestamp": "2025-01-15T14:30:00Z",
     "uptime": 3600,
-    "version": "1.0.235-fork-1",
+    "version": "1.0.235-fork-2",
     "devices": 42,
     "entities": 58,
     "ip": "192.168.1.100"
@@ -186,7 +186,7 @@ The `.fqa` is a JSON file that bundles the Lua sources together with QuickApp me
 python3 scripts/build_fqa.py
 ```
 
-This produces `hc3_to_mqtt_bridge-1.0.235-fork-1.fqa` in the repository root, with the contents of every `src/*.lua` injected into the corresponding QuickApp file slot. The script preserves the existing QuickApp variable defaults and view layout from the previous `.fqa`. Use `--check` to verify that the committed `.fqa` is in sync with `src/` without writing.
+This produces `hc3_to_mqtt_bridge-1.0.235-fork-2.fqa` in the repository root, with the contents of every `src/*.lua` injected into the corresponding QuickApp file slot. The script preserves the existing QuickApp variable defaults and view layout from the previous `.fqa`. Use `--check` to verify that the committed `.fqa` is in sync with `src/` without writing.
 
 ```bash
 python3 scripts/build_fqa.py --check

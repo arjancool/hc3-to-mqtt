@@ -28,11 +28,18 @@ $ErrorActionPreference = "Stop"
 # ---------------------------------------------------------------------------
 $Owner      = "arjancool"
 $Repo       = "hc3-to-mqtt"
-$TagName    = "v1.0.235-fork-1"
-$ReleaseName = "v1.0.235-fork-1"
-$FqaFile    = Join-Path $PSScriptRoot "..\hc3_to_mqtt_bridge-1.0.235-fork-1.fqa"
+$TagName    = "v1.0.235-fork-2"
+$ReleaseName = "v1.0.235-fork-2"
+$FqaFile    = Join-Path $PSScriptRoot "..\hc3_to_mqtt_bridge-1.0.235-fork-2.fqa"
 $ReleaseBody = @"
 ## Fibaro HC3 to MQTT Bridge — fork release
+
+### New in fork-2
+- **S1/S2 switch inputs as Home Assistant device triggers** — dimmers/relays (FGD-212, FGS-213, FGS-223, ...) and remotes get a trigger per button and press type
+  - Enable scene activation on the module first (e.g. FGD-212 parameter 28, FGS-213/223 parameters 40/41)
+- Remote controller triggers and key-press sensor work again
+- Availability ``online`` is re-published with every heartbeat
+- Fixed crash when ``mqttConvention`` is empty or unknown
 
 ### Changes vs original v1.0.235
 - **Heartbeat / Alive message** — publishes a periodic JSON status message to ``homeassistant/hc3-heartbeat``
@@ -42,7 +49,7 @@ $ReleaseBody = @"
 - **Auto-create optional variables** — no more "Variable not found" warnings on startup
 
 ### Installation
-1. Download ``hc3_to_mqtt_bridge-1.0.235-fork-1.fqa``
+1. Download ``hc3_to_mqtt_bridge-1.0.235-fork-2.fqa``
 2. Upload via HC3 web UI: **Settings → Devices → + → Other Device → Upload File**
 3. Configure QuickApp variables: ``mqttUrl``, optionally ``mqttUsername`` / ``mqttPassword``, ``hbInterval``, ``hbIncludeMeta``
 "@

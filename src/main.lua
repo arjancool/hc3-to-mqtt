@@ -1,7 +1,13 @@
---[[ RELEASE NOTES FOR 1.0.235-fork-1
-Summary: Fork with heartbeat/alive MQTT message and sensor device_class fix
+--[[ RELEASE NOTES FOR 1.0.235-fork-2
+Summary: S1/S2 switch inputs and remote buttons as Home Assistant device triggers
 
 Description:
+- Device triggers per button and press type for every device with central scene
+  support (dimmers/relays such as FGD-212, FGS-213, FGS-223, and remote controllers)
+- Remote controller triggers and key-press sensor work again
+- Fixed crash when "mqttConvention" is empty or unknown
+
+Earlier fork changes (1.0.235-fork-1):
 - Added periodic heartbeat/alive MQTT message on topic "homeassistant/hc3-heartbeat"
   Configurable interval via QuickApp variable "hbInterval" (default: 60 seconds)
   Payload includes: status, timestamp, uptime, version, device/entity count, IP address
@@ -12,7 +18,7 @@ Description:
 - Forked from alexander-vitishchenko/hc3-to-mqtt v1.0.235
 ]]--
 
-local QUICKAPP_VERSION = "1.0.235-fork-1"
+local QUICKAPP_VERSION = "1.0.235-fork-2"
 local DEFAULT_HEARTBEAT_INTERVAL = 60
 local DEFAULT_RECONNECT_DELAY_MS = 10000
 local DEFAULT_KEEPALIVE = 60
@@ -28,7 +34,7 @@ function QuickApp:onInit()
     self:debug("")
     self:debug("------- HC3 <-> MQTT BRIDGE")
     self:debug("Version: " .. QUICKAPP_VERSION)
-    self:debug("Fork changes: Added heartbeat/alive MQTT message")
+    self:debug("Fork changes: heartbeat/alive MQTT message, S1/S2 and remote buttons as device triggers")
     self:debug("(!) IMPORTANT NOTE FOR THOSE USERS WHO USED THE QUICKAPP PRIOR TO 1.0.191 VERSION: Your Home Assistant dashboards and automations need to be reconfigured with new entity ids. This is a one-time effort that introduces a relatively \"small\" inconvenience for the greater good (a) introduce long-term stability so Home Assistant entity duplicates will not happen in certain scenarios (b) entity id namespaces are now synchronized between Fibaro and Home Assistant ecosystems")
 
     -- Create optional variables with defaults if absent (avoids "Variable not found" warnings on every start)
@@ -225,7 +231,7 @@ end
         "status": "online",
         "timestamp": "2025-01-15T14:30:00Z",
         "uptime": 3600,
-        "version": "1.0.235-fork-1",
+        "version": "1.0.235-fork-2",
         "devices": 42,
         "entities": 58,
         "ip": "192.168.1.100"
