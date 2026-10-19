@@ -6,7 +6,7 @@
 
 ## Contents
 
-- [Fork changes](#-fork-changes-v10235-fork-2)
+- [Fork changes](#-fork-changes-v10235-fork-3)
   - [Heartbeat / Alive message](#heartbeat--alive-message)
   - [Improved sensor device_class mapping](#improved-sensor-device_class-mapping)
   - [S1/S2 switch inputs and remote buttons as triggers](#s1s2-switch-inputs-and-remote-buttons-as-triggers)
@@ -17,7 +17,7 @@
 - [Security considerations](#security-considerations)
 - [Credits](#credits)
 
-## 🔀 Fork changes (v1.0.235-fork-2)
+## 🔀 Fork changes (v1.0.235-fork-3)
 
 ### Heartbeat / Alive message
 Publishes a periodic status message to MQTT so Home Assistant can monitor whether the HC3 bridge is alive and responsive.
@@ -30,7 +30,7 @@ Publishes a periodic status message to MQTT so Home Assistant can monitor whethe
     "status": "online",
     "timestamp": "2025-01-15T14:30:00Z",
     "uptime": 3600,
-    "version": "1.0.235-fork-2",
+    "version": "1.0.235-fork-3",
     "devices": 42,
     "entities": 58,
     "ip": "192.168.1.100"
@@ -103,6 +103,10 @@ In Home Assistant: **Automations → Add trigger → Device →** select the dim
 |--------------|-----------------|-------------|
 | S1 / button 1 | `button_1` ("First button") | `button_short_press`, `button_double_press`, `button_triple_press`, `button_long_press` (held), `button_long_release` |
 | S2 / button 2 | `button_2` ("Second button") | same, as far as the device supports them |
+
+Modules report presses in one of two ways, both supported:
+- **Central Scene** (newer firmware, remotes such as the Fibaro Button): one trigger per button and press type the module advertises.
+- **Scene Activation** (e.g. FGD-212 firmware 3.5): the HC3 shows a separate "Switch" device with `availableScenes`. Fibaro's scene ids are mapped to the same triggers: tens digit = input (1 = S1, 2 = S2), units digit = action (6 click, 4 double click, 5 triple click, 2 hold, 3 release, 0/1 toggle switch on/off). Example: 16 = S1 click, 24 = S2 double click.
 
 > **Enable scene activation on the module.** Many Fibaro modules don't send central scenes by default, e.g. FGD-212 parameter 28 and FGS-213/FGS-223 parameters 40/41. Check the manual of your module.
 
@@ -187,7 +191,7 @@ The `.fqa` is a JSON file that bundles the Lua sources together with QuickApp me
 python3 scripts/build_fqa.py
 ```
 
-This produces `hc3_to_mqtt_bridge-1.0.235-fork-2.fqa` in the repository root, with the contents of every `src/*.lua` injected into the corresponding QuickApp file slot. The script preserves the existing QuickApp variable defaults and view layout from the previous `.fqa`. Use `--check` to verify that the committed `.fqa` is in sync with `src/` without writing.
+This produces `hc3_to_mqtt_bridge-1.0.235-fork-3.fqa` in the repository root, with the contents of every `src/*.lua` injected into the corresponding QuickApp file slot. The script preserves the existing QuickApp variable defaults and view layout from the previous `.fqa`. Use `--check` to verify that the committed `.fqa` is in sync with `src/` without writing.
 
 ```bash
 python3 scripts/build_fqa.py --check

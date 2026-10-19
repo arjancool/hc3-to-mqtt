@@ -7,7 +7,14 @@ this project loosely follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.0.235-fork-3] - 2026-10-19
+
 ### Added
+- **S1/S2 triggers for modules that use Scene Activation** (e.g. FGD-212
+  firmware 3.5): the "Switch" device's `availableScenes` become the same
+  Home Assistant device triggers as Central Scene buttons. Presses arrive as
+  `SceneActivationEvent` or as a `sceneActivation` property update on the
+  dimmer; both are handled, and a press reported both ways fires once.
 - **CI and automatic releases** (`.github/workflows/ci.yml`): every pull
   request and push to `master` runs a Lua syntax check, luacheck, tests against
   a mocked HC3 (`tests/run_tests.lua`), an `.fqa` sync check and a version

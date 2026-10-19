@@ -662,12 +662,22 @@ function __checkAndAppendLinkedDevices(fibaroDevice)
     -- but also the S1/S2 inputs of dimmers and relays. Create one Home Assistant
     -- device trigger per combination of button and press type.
     local centralSceneSupport = fibaroDevice.properties.centralSceneSupport
+    local availableScenes = fibaroDevice.properties.availableScenes
     if type(centralSceneSupport) == "table" then
         for _, scene in ipairs(centralSceneSupport) do
             if scene.keyId ~= nil and type(scene.keyAttributes) == "table" then
                 for _, keyAttribute in ipairs(scene.keyAttributes) do
                     appendNodeByFibaroDevice(createLinkedKey(fibaroDevice, scene.keyId, keyAttribute), true)
                 end
+            end
+        end
+    elseif type(availableScenes) == "table" then
+        -- Modules using Scene Activation instead (e.g. FGD-212 on its "Switch"
+        -- child: 16 = S1 click, 24 = S2 double click)
+        for _, scene in ipairs(availableScenes) do
+            if scene.sceneId ~= nil then
+                local keyId, keyAttribute = sceneActivationToKey(scene.sceneId)
+                appendNodeByFibaroDevice(createLinkedKey(fibaroDevice, keyId, keyAttribute), true)
             end
         end
     end

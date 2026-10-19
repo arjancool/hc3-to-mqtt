@@ -427,7 +427,11 @@ local keyAttributeToTypeMap = {
     ["pressed4"] = "button_quadruple_press",
     ["pressed5"] = "button_quintuple_press",
     ["helddown"] = "button_long_press",
-    ["released"] = "button_long_release"
+    ["released"] = "button_long_release",
+    -- Scene Activation (see sceneActivationToKey)
+    ["turnon"] = "turn_on",
+    ["turnoff"] = "turn_off",
+    ["scene"] = "button_short_press"
 }
 function MqttConventionHomeAssistant:convertKeyAttributeToType(keyAttribute)
     local type = keyAttributeToTypeMap[keyAttribute]

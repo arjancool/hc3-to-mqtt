@@ -19,6 +19,19 @@ local devices = {
               { keyId = 1, keyAttributes = {"Pressed", "Released", "HeldDown", "Pressed2", "Pressed3"} },
               { keyId = 2.0, keyAttributes = {"Pressed", "Pressed2"} } } },
       actions = { turnOn = 0, turnOff = 0, setValue = 1 } },
+    -- FGD-212 with Scene Activation (as reported by a real HC3): hidden Z-Wave
+    -- node, a "Switch" child with availableScenes, and the dimmer itself
+    { id = 170, name = "1.03 Spots Device", parentId = 1, baseType = "com.fibaro.device", type = "com.fibaro.zwaveDevice",
+      enabled = true, visible = false, interfaces = {"zwave"}, properties = {}, actions = {} },
+    { id = 172, name = "1.03 Spots Switch", parentId = 170, baseType = "com.fibaro.actor", type = "com.fibaro.remoteController",
+      enabled = true, visible = true, interfaces = {"zwave", "zwaveSceneActivationEvent"},
+      properties = { dead = false, zwaveCompany = "Fibargroup",
+          availableScenes = { { name = "", sceneId = 26 }, { name = "", sceneId = 16 }, { name = "", sceneId = 24 }, { name = "", sceneId = 14 } } },
+      actions = { reconfigure = 0 } },
+    { id = 173, name = "1.03 Spots", parentId = 170, baseType = "com.fibaro.multilevelSwitch", type = "com.fibaro.FGD212",
+      enabled = true, visible = true, interfaces = {"light", "zwave", "zwaveSceneActivation"},
+      properties = { value = 40, dead = false, state = true, sceneActivation = 26 },
+      actions = { turnOn = 0, turnOff = 0, setValue = 1 } },
     { id = 300, name = "KeyFob", parentId = 0, baseType = "com.fibaro.remoteController", type = "com.fibaro.FGKF601",
       enabled = true, visible = true, interfaces = {"zwave", "battery"},
       properties = { dead = false, batteryLevel = 90,
@@ -82,15 +95,15 @@ for _, m in ipairs(published) do
         triggers[#triggers + 1] = dk.decode(m.payload)
     end
 end
-check(#triggers == 8, "8 device triggers discovered (7 dimmer, 1 remote), got " .. #triggers)
+check(#triggers == 12, "12 device triggers discovered (7 central scene dimmer, 4 scene activation, 1 remote), got " .. #triggers)
 for _, t in ipairs(triggers) do
     if not (t.device and t.device.identifiers) then check(false, "trigger " .. tostring(t.payload) .. " has device info") end
 end
 
 -- Simulates HA: a trigger fires when {{ value_json.trigger }} equals its payload
-local function press(id, keyId, attr)
+local function dispatch(event)
     local before = #published
-    qa:dispatchFibaroEventToMqtt({ type = "CentralSceneEvent", data = { id = id, keyId = keyId, keyAttribute = attr } })
+    qa:dispatchFibaroEventToMqtt(event)
     local fired, msgs = {}, {}
     for i = before + 1, #published do
         local m = published[i]
@@ -101,6 +114,10 @@ local function press(id, keyId, attr)
         end
     end
     return fired, msgs
+end
+
+local function press(id, keyId, attr)
+    return dispatch({ type = "CentralSceneEvent", data = { id = id, keyId = keyId, keyAttribute = attr } })
 end
 
 local fired, msgs = press(226, 1, "Pressed")
@@ -126,6 +143,26 @@ check(sensorUpdated, "remote sensor shows the last key press")
 
 fired = press(1, 1, "Pressed")
 check(#fired == 0, "events from excluded (hidden) devices are ignored")
+
+-- Scene Activation (FGD-212 with parameter 28 = 1) --------------------------
+fired, msgs = dispatch({ type = "SceneActivationEvent", data = { id = 172, sceneId = 26 } })
+check(#fired == 1 and fired[1] == "button_2/button_short_press", "SceneActivationEvent 26 fires button_2/button_short_press")
+sensorUpdated = false
+for _, m in ipairs(msgs) do
+    if m.topic:match("sensor/172/.*/value$") and m.payload:find("2%-button_short_press") then sensorUpdated = true end
+end
+check(sensorUpdated, "switch sensor #172 shows the last scene")
+
+fired, msgs = dispatch({ type = "DevicePropertyUpdatedEvent", data = { id = 173, property = "sceneActivation", newValue = 16 } })
+check(#fired == 1 and fired[1] == "button_1/button_short_press", "sceneActivation property 16 on the dimmer fires the switch's button_1/button_short_press")
+touched = false
+for _, m in ipairs(msgs) do if m.topic:match("light/173/") then touched = true end end
+check(not touched, "scene activation does not touch the dimmer's own topics")
+
+local total = 0
+fired = dispatch({ type = "SceneActivationEvent", data = { id = 172, sceneId = 14 } }); total = total + #fired
+fired = dispatch({ type = "DevicePropertyUpdatedEvent", data = { id = 173, property = "sceneActivation", newValue = 14 } }); total = total + #fired
+check(total == 1, "the same press reported as event and as property update fires once (" .. total .. ")")
 
 -- MQTT convention selection -------------------------------------------------
 for _, case in ipairs({
