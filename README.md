@@ -13,6 +13,7 @@
 - [How to use](#how-to-use)
 - [Supported device types](#already-supported-device-types)
 - [Building the .fqa from source](#building-the-fqa-from-source)
+- [Checks and releases](#checks-and-releases)
 - [Security considerations](#security-considerations)
 - [Credits](#credits)
 
@@ -191,6 +192,21 @@ This produces `hc3_to_mqtt_bridge-1.0.235-fork-2.fqa` in the repository root, wi
 ```bash
 python3 scripts/build_fqa.py --check
 ```
+
+## Checks and releases
+
+The GitHub Actions workflow `.github/workflows/ci.yml` runs on every pull request and every push to `master`:
+
+- Lua syntax check and `luacheck`
+- `tests/run_tests.lua`: runs the sources against a mocked HC3 (button triggers, MQTT convention selection)
+- the `.fqa` is in sync with `src/` (`scripts/build_fqa.py --check`)
+- the version is consistent: `QUICKAPP_VERSION` in `src/main.lua`, the `.fqa` file name, `scripts/build_fqa.py` and a `## [<version>]` section in `CHANGELOG.md`
+
+After a push to `master` passes these checks, the workflow creates the GitHub release `v<version>` with the `.fqa` attached and the CHANGELOG section as release notes. If that release already exists nothing is published, so a merge without a version bump doesn't release.
+
+To release a new version: bump `QUICKAPP_VERSION`, rename the `.fqa` and `DEFAULT_FQA` in `scripts/build_fqa.py`, add a CHANGELOG section, run `python3 scripts/build_fqa.py`, and merge to `master`.
+
+Run the tests locally with `lua5.3 tests/run_tests.lua src` (needs the `dkjson` rock).
 
 ## Security considerations
 

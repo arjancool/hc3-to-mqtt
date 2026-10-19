@@ -1,0 +1,106 @@
+name: CI and release
+
+# Checks run on every pull request and every push to master. After a push to
+# master passes the checks, a GitHub release is created for the version in
+# src/main.lua (QUICKAPP_VERSION) -- but only if that version's tag does not
+# exist yet. Bump QUICKAPP_VERSION and add a CHANGELOG section to release.
+on:
+  pull_request:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      fqa: ${{ steps.version.outputs.fqa }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Lua tooling
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q lua5.3 liblua5.3-dev luarocks
+          sudo luarocks --lua-version=5.3 install luacheck
+          sudo luarocks --lua-version=5.3 install dkjson
+
+      - name: Lua syntax
+        run: for f in src/*.lua tests/*.lua; do luac5.3 -p "$f"; done
+
+      - name: Luacheck (fails on errors, not on warnings)
+        run: |
+          set +e
+          luacheck --no-color src/*.lua
+          status=$?
+          if [ "$status" -gt 1 ]; then exit "$status"; fi
+
+      - name: Tests (mocked HC3 runtime)
+        run: lua5.3 tests/run_tests.lua src
+
+      - name: .fqa is in sync with src/
+        run: python3 scripts/build_fqa.py --check
+
+      - name: Version is consistent
+        id: version
+        run: |
+          version=$(grep -oP 'QUICKAPP_VERSION = "\K[^"]+' src/main.lua)
+          fqa="hc3_to_mqtt_bridge-${version}.fqa"
+          echo "QuickApp version: $version"
+          [ -n "$version" ] || { echo "::error::QUICKAPP_VERSION not found in src/main.lua"; exit 1; }
+          [ -f "$fqa" ] || { echo "::error::$fqa not found; rename the .fqa and DEFAULT_FQA in scripts/build_fqa.py"; exit 1; }
+          [ "$(ls *.fqa | wc -l)" -eq 1 ] || { echo "::error::expected exactly one .fqa in the repository root"; ls *.fqa; exit 1; }
+          grep -qF "$fqa" scripts/build_fqa.py || { echo "::error::scripts/build_fqa.py does not point to $fqa"; exit 1; }
+          grep -qF "## [${version}]" CHANGELOG.md || { echo "::error::CHANGELOG.md has no '## [${version}]' section"; exit 1; }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "fqa=$fqa" >> "$GITHUB_OUTPUT"
+
+  release:
+    needs: checks
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    concurrency:
+      group: release
+      cancel-in-progress: false
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ needs.checks.outputs.version }}
+      FQA: ${{ needs.checks.outputs.fqa }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Skip if this version is already released
+        id: exists
+        run: |
+          if gh release view "v${VERSION}" >/dev/null 2>&1; then
+            echo "::notice::Release v${VERSION} already exists; bump QUICKAPP_VERSION to publish a new release."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create release
+        if: steps.exists.outputs.skip == 'false'
+        run: |
+          awk -v header="## [${VERSION}]" '
+            index($0, header) == 1 { found = 1; next }
+            found && /^## \[/ { exit }
+            found { print }
+          ' CHANGELOG.md > notes.md
+          cat >> notes.md <<EOF
+
+          ### Installation
+          1. Download \`${FQA}\` below.
+          2. Update the existing bridge QuickApp on your HC3 with it, or upload it once via **Settings → Devices → + → Other Device → Upload File**.
+          3. Configure the QuickApp variables \`mqttUrl\`, and optionally \`mqttUsername\` / \`mqttPassword\`, \`hbInterval\`, \`hbIncludeMeta\`.
+          EOF
+          gh release create "v${VERSION}" "$FQA" \
+            --title "v${VERSION}" \
+            --notes-file notes.md \
+            --target "$GITHUB_SHA"

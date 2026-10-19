@@ -7,6 +7,13 @@ this project loosely follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **CI and automatic releases** (`.github/workflows/ci.yml`): every pull
+  request and push to `master` runs a Lua syntax check, luacheck, tests against
+  a mocked HC3 (`tests/run_tests.lua`), an `.fqa` sync check and a version
+  consistency check. A push to `master` with a new `QUICKAPP_VERSION` creates
+  the GitHub release with the `.fqa` attached.
+
 ## [1.0.235-fork-2] - 2026-10-19
 
 ### Added
