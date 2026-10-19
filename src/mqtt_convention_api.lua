@@ -36,6 +36,11 @@ end
 function MqttConventionPrototype:refreshAvailability()
 end
 
+-- Called for every button press (central scene) of an included device; the
+-- default does nothing.
+function MqttConventionPrototype:onCentralSceneEvent(deviceNode, keyId, keyAttribute)
+end
+
 -----------------------------------
 -- HOME ASSISTANT 
 -----------------------------------
@@ -118,7 +123,7 @@ function MqttConventionHomeAssistant:onDeviceNodeCreated(deviceNode)
     if (haEntity.type == RemoteControllerKey.type) then
         -- Home Assistant pretty unique spec for "device_automation/trigger" devices
         -- so better use another factory type for MQTT Discovery Message
-        MqttConventionHomeAssistant:onRemoteControllerKeyCreated(deviceNode, self.mqtt)
+        self:onRemoteControllerKeyCreated(deviceNode)
         return
     end
 
@@ -375,29 +380,43 @@ function MqttConventionHomeAssistant:onDeviceNodeCreated(deviceNode)
     self.mqtt:publish(self:getDeviceTopic(haEntity) .. "config_json_attributes", json.encode(deviceNode.fibaroDevice), {retain = true})
 end
 
-function MqttConventionHomeAssistant:onRemoteControllerKeyCreated(deviceNode, mqtt)
+function MqttConventionHomeAssistant:getCentralSceneEventTopic(fibaroDeviceId)
+    return self.rootTopic .. "event/" .. tostring(fibaroDeviceId)
+end
+
+-- Device trigger for one (button, press type) of a remote controller or of the
+-- S1/S2 inputs of a dimmer/relay. It fires on the scene events published by
+-- onCentralSceneEvent for the source device.
+function MqttConventionHomeAssistant:onRemoteControllerKeyCreated(deviceNode)
     local haEntity = deviceNode.identifiedHaEntity
-    
-    local keyId = deviceNode.fibaroDevice.keyId
-    local keyType = self:convertKeyAttributeToType(deviceNode.fibaroDevice.keyAttribute)
-    
+    local fibaroKey = deviceNode.fibaroDevice
+
     local msg = {
         automation_type = "trigger",
 
-        topic = self:getterTopic(haEntity, "value"),
-        value_template = "{{ value_json.value }}", 
+        topic = self:getCentralSceneEventTopic(fibaroKey.linkedDevice.id),
+        value_template = "{{ value_json.trigger }}",
+        payload = centralSceneTriggerId(fibaroKey.keyId, fibaroKey.keyAttribute),
 
-        type = keyType, 
-        subtype = "button_" .. keyId,
-        payload = keyId .. "-" .. keyType
+        type = self:convertKeyAttributeToType(fibaroKey.keyAttribute),
+        subtype = "button_" .. normalizeSceneKeyId(fibaroKey.keyId),
+
+        device = deviceNode.identifiedHaDevice
     }
 
-    ------------------------------------------
-    --- PARENT DEVICE INFO
-    ------------------------------------------
-    msg.device = deviceNode.identifiedHaDevice
+    self.mqtt:publish(self:getDeviceTopic(haEntity) .. "config", json.encode(msg), {retain = true})
+end
 
-    mqtt:publish(self:getDeviceTopic(haEntity) .. "config", json.encode(msg), {retain = true})
+function MqttConventionHomeAssistant:onCentralSceneEvent(deviceNode, keyId, keyAttribute)
+    local payload = json.encode({
+        event_type = "central_scene",
+        device_id = deviceNode.id,
+        button = keyId,
+        action = string.lower(tostring(keyAttribute)),
+        trigger = centralSceneTriggerId(keyId, keyAttribute)
+    })
+
+    self.mqtt:publish(self:getCentralSceneEventTopic(deviceNode.id), payload, {retain = false})
 end
 
 -- Mapping from Fibaro central-scene key attributes to Home Assistant trigger types

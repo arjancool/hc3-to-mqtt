@@ -513,30 +513,16 @@ function QuickApp:dispatchFibaroEventToMqtt(event)
         -- process events for devices that are required to be known to the QuickApp 
         if deviceNode.included then
             -- process events for devices that are included by user filter criteria
+
+            -- Button presses are forwarded even for devices without an own HA entity
+            if (eventType == "CentralSceneEvent") then
+                return self:dispatchCentralSceneEvent(deviceNode, event)
+            end
+
             local haEntity = deviceNode.identifiedHaEntity
             if haEntity then
                 if (eventType == "DevicePropertyUpdatedEvent") then
-                    return self:dispatchDevicePropertyUpdatedEvent(deviceNode, event) 
-                elseif (eventType == "CentralSceneEvent") then
-                    local keyId = event.data.keyId
-                    local keyAttr = string.lower(event.data.keyAttribute)
-
-                    self:debug("Scene Event: button " .. tostring(keyId) .. " action: " .. tostring(keyAttr))
-
-                    -- Publish a discrete scene event for Home Assistant on a per-device topic.
-                    -- Topic: homeassistant/event/<DEVICE_ID>
-                    local scenePayload = json.encode({
-                        event_type = "central_scene",
-                        device_id = fibaroDeviceId,
-                        button = keyId,
-                        action = keyAttr
-                    })
-
-                    self.mqtt:publish("homeassistant/event/" .. fibaroDeviceId, scenePayload, {retain = false})
-
-                    -- Don't fall through to property-update logic for scene events
-                    return
-
+                    return self:dispatchDevicePropertyUpdatedEvent(deviceNode, event)
                 elseif (eventType == "DeviceModifiedEvent") then
                     -- Fibaro generates "DeviceModifiedEvent" event after "DeviceCreatedEvent" => filter out the redundant event
                     local deviceLastCreationTimestamp = deviceCreatedEventTimestamps[fibaroDeviceId]
@@ -631,16 +617,37 @@ function QuickApp:rememberLastMqttCommandTime(deviceId)
     self.lastMqttCommandTime[deviceId] = os.time()
 end
 
+-- S1/S2 inputs of dimmers/relays and remote controller keys send one
+-- CentralSceneEvent per press (pressed, pressed2, helddown, released, ...).
+function QuickApp:dispatchCentralSceneEvent(deviceNode, event)
+    local keyId = event.data.keyId
+    local keyAttribute = event.data.keyAttribute
+    if (keyId == nil) or (keyAttribute == nil) then
+        self:debug("Ignoring CentralSceneEvent without keyId/keyAttribute: " .. json.encode(event))
+        return
+    end
+
+    self:debug("Scene event: device #" .. tostring(deviceNode.id) .. " button " .. centralSceneTriggerId(keyId, keyAttribute))
+
+    for _, mqttConvention in ipairs(self.mqttConventions) do
+        mqttConvention:onCentralSceneEvent(deviceNode, keyId, keyAttribute)
+    end
+
+    -- A remote controller also shows its last key press as sensor value. Never do
+    -- this for other devices: a dimmer's "value" is its brightness.
+    local haEntity = deviceNode.identifiedHaEntity
+    if haEntity and (haEntity.type == RemoteController.type) and (haEntity.subtype == RemoteController.subtype) then
+        self:simulatePropertyUpdate(deviceNode.fibaroDevice, "value", normalizeSceneKeyId(keyId) .. "," .. string.lower(tostring(keyAttribute)))
+    end
+end
+
 function QuickApp:dispatchDeviceCreatedEvent(fibaroDeviceId)
     local newDeviceNode = createAndAddDeviceNodeToHierarchyById(fibaroDeviceId)
 
     if (newDeviceNode.included and newDeviceNode.identifiedHaEntity) then
         self:debug("Fibaro device " .. newDeviceNode.id .. " added")
-        for i, j in ipairs(self.mqttConventions) do
-            j:onDeviceNodeCreated(newDeviceNode)
-        end
-        
-        self:__publishDeviceProperties(newDeviceNode.fibaroDevice)
+        -- also publishes linked children (energy/power/battery sensors, button triggers)
+        self:publishDeviceNodeToMqtt(newDeviceNode)
 
         printDeviceNodeHierarchy(newDeviceNode, 1)
     else

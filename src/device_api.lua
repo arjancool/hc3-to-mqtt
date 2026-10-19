@@ -484,9 +484,6 @@ function RemoteControllerKey.isSupported(fibaroDevice)
     end
 end
 
-function RemoteControllerKey.init(fibaroDevice)
-    -- not needed for now
-end
 
 ----------------------------------- 
 -- SUPPORTED DEVICE MAPPINGS

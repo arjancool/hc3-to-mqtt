@@ -9,6 +9,7 @@
 - [Fork changes](#-fork-changes-v10235-fork-1)
   - [Heartbeat / Alive message](#heartbeat--alive-message)
   - [Improved sensor device_class mapping](#improved-sensor-device_class-mapping)
+  - [S1/S2 switch inputs and remote buttons as triggers](#s1s2-switch-inputs-and-remote-buttons-as-triggers)
 - [How to use](#how-to-use)
 - [Supported device types](#already-supported-device-types)
 - [Building the .fqa from source](#building-the-fqa-from-source)
@@ -92,6 +93,24 @@ mqtt:
       icon: "mdi:server-network"
 ```
 
+### S1/S2 switch inputs and remote buttons as triggers
+Presses on the S1/S2 inputs of Fibaro dimmers and relays (e.g. FGD-212, FGS-213, FGS-223) and on remote controller buttons are sent by the HC3 as *central scene* events. For every device that supports central scenes, the bridge creates a Home Assistant **device trigger** per combination of button and press type, attached to the same Home Assistant device as the dimmer/switch.
+
+In Home Assistant: **Automations → Add trigger → Device →** select the dimmer/switch → e.g. *"First button" pressed*.
+
+| Fibaro input | Trigger subtype | Press types |
+|--------------|-----------------|-------------|
+| S1 / button 1 | `button_1` ("First button") | `button_short_press`, `button_double_press`, `button_triple_press`, `button_long_press` (held), `button_long_release` |
+| S2 / button 2 | `button_2` ("Second button") | same, as far as the device supports them |
+
+> **Enable scene activation on the module.** Many Fibaro modules don't send central scenes by default, e.g. FGD-212 parameter 28 and FGS-213/FGS-223 parameters 40/41. Check the manual of your module.
+
+Every press is also published (non-retained) on `homeassistant/event/<fibaro-device-id>`, for use in MQTT triggers:
+
+```json
+{ "event_type": "central_scene", "device_id": 226, "button": 1, "action": "pressed2", "trigger": "1-pressed2" }
+```
+
 ### Improved sensor device_class mapping
 Based on [Eroi69's fix](https://github.com/Eroi69/hc3-to-mqtt/commit/7bc34385f753d25f70728cb290ad9747cb31fe83). The original code determined `device_class` only from the Fibaro subtype, which missed common units. This fork maps the unit of measurement to the correct Home Assistant device_class:
 
@@ -156,7 +175,7 @@ For ambiguous units (e.g. `%` is used by humidity, battery, position) the mappin
    * Charge level sensors for battery-powered devices
    * Lights - binary, dimmers and RGBW (no RGB for now)
    * Switches - binary and sound
-   * Remote Controllers, where each key is binded to automation triggers visible in Home Assistant GUI
+   * Remote Controllers and the S1/S2 inputs of dimmers/relays, where each key and press type is bound to an automation trigger visible in Home Assistant GUI
    * Thermostats (limited support for a few known vendors) 
 
 ## Building the .fqa from source

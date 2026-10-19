@@ -7,7 +7,25 @@ this project loosely follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **S1/S2 switch inputs as Home Assistant device triggers**: every included
+  device with central scene support (dimmers and relays such as FGD-212,
+  FGS-213, FGS-223, not only remote controllers) gets a device trigger per
+  button and press type. Scene events on `homeassistant/event/<id>` now carry a
+  `trigger` field (e.g. `"1-pressed2"`) that these triggers match on.
+
 ### Fixed
+- **Remote controller triggers never fired**: they listened on a topic nothing
+  published to. All button triggers now listen on `homeassistant/event/<id>`.
+- **Remote controller sensor stopped showing key presses** since scene events
+  were only published to `homeassistant/event/<id>`. Remote controllers update
+  their sensor again; dimmers still don't, so a press can't overwrite their
+  brightness.
+- **Central scene events of included devices without an own entity** were
+  dropped; they are now forwarded too.
+- **Linked entities of newly added or modified devices** (energy, power and
+  battery sensors, button triggers) were only announced to Home Assistant after
+  a QuickApp restart; they are now published right away.
 - **Entities stuck on "unavailable" after another bridge went offline**: the
   availability topic `homeassistant/hc3-status` is retained and shared. When a
   second bridge instance was removed, its `offline` overwrote ours and every
