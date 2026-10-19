@@ -1,7 +1,12 @@
---[[ RELEASE NOTES FOR 1.0.235-fork-3
-Summary: S1/S2 triggers also for modules that use Scene Activation (e.g. FGD-212)
+--[[ RELEASE NOTES FOR 1.0.235-fork-4
+Summary: Remote/switch sensors show key presses again; hold/release triggers for Scene Activation
 
 Description:
+- Remote controller sensors no longer get state_class "measurement" (HA rejected their text state)
+- state_class only for numeric sensors, not binary sensors
+- Hold/release triggers for every Fibaro Scene Activation input
+
+Earlier fork changes (1.0.235-fork-3):
 - Scene Activation ids (availableScenes, SceneActivationEvent, "sceneActivation"
   property) are mapped to the same S1/S2 device triggers as Central Scene
 
@@ -22,7 +27,7 @@ Earlier fork changes (1.0.235-fork-1):
 - Forked from alexander-vitishchenko/hc3-to-mqtt v1.0.235
 ]]--
 
-local QUICKAPP_VERSION = "1.0.235-fork-3"
+local QUICKAPP_VERSION = "1.0.235-fork-4"
 local DEFAULT_HEARTBEAT_INTERVAL = 60
 local DEFAULT_RECONNECT_DELAY_MS = 10000
 local DEFAULT_KEEPALIVE = 60
@@ -235,7 +240,7 @@ end
         "status": "online",
         "timestamp": "2025-01-15T14:30:00Z",
         "uptime": 3600,
-        "version": "1.0.235-fork-3",
+        "version": "1.0.235-fork-4",
         "devices": 42,
         "entities": 58,
         "ip": "192.168.1.100"

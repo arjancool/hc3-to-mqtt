@@ -257,18 +257,21 @@ function MqttConventionHomeAssistant:onDeviceNodeCreated(deviceNode)
             msg.device_class = haEntity.subtype
         end
 
-        -- Assign correct state_class
-        if msg.device_class == "energy" then
-            msg.state_class = "total_increasing"
-        elseif msg.device_class then
-            msg.state_class = "measurement"
-        end
-
         if (haEntity.subtype == RemoteController.subtype) then
             -- Remote controller sensor is not natively supported by Home Assistant, thus need to replace "remoteController" subtype with "None" haEntity class
             msg.device_class = nil
             -- Add "remote" icon
             msg.icon = "mdi:remote"
+        end
+
+        -- state_class marks a numeric sensor; HA rejects text states for it, so
+        -- only numeric sensors (not binary sensors or remote key presses) get one
+        if (haEntity.type == "sensor") and msg.device_class then
+            if msg.device_class == "energy" then
+                msg.state_class = "total_increasing"
+            else
+                msg.state_class = "measurement"
+            end
         end
 
         if (haEntity.type == RemoteController.type) and (haEntity.subtype == RemoteController.subtype) then
