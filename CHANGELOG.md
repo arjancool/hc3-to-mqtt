@@ -15,6 +15,9 @@ this project loosely follows [Semantic Versioning](https://semver.org/).
   `trigger` field (e.g. `"1-pressed2"`) that these triggers match on.
 
 ### Fixed
+- **Crash when `mqttConvention` is empty or unknown**: the default convention
+  was stored at index 0, which the code never reads. It now falls back to Home
+  Assistant and warns about unknown names.
 - **Remote controller triggers never fired**: they listened on a topic nothing
   published to. All button triggers now listen on `homeassistant/event/<id>`.
 - **Remote controller sensor stopped showing key presses** since scene events

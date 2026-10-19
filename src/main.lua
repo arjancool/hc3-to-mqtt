@@ -54,16 +54,18 @@ function QuickApp:establishMqttConnection()
     -- IDENTIFY WHICH MQTT CONVENTIONS TO BE USED (e.g. Home Assistant, Homio, etc)
     self.mqttConventions = { }
     local mqttConventionStr = self:getVariable("mqttConvention")
-    if (isEmptyString(mqttConventionStr)) then
-        self.mqttConventions[0] = MqttConventionHomeAssistant
-    else
-        local arr = splitString(mqttConventionStr, ",")
-        for i, j in ipairs(arr) do
-            local convention = mqttConventionMappings[j]
+    if (isNotEmptyString(mqttConventionStr)) then
+        for _, conventionName in ipairs(splitString(mqttConventionStr, ",")) do
+            local convention = mqttConventionMappings[conventionName]
             if (convention) then
-                self.mqttConventions[i] = clone(convention)
+                table.insert(self.mqttConventions, clone(convention))
+            else
+                self:warning("Unknown mqttConvention '" .. conventionName .. "' ignored")
             end
         end
+    end
+    if (#self.mqttConventions == 0) then
+        table.insert(self.mqttConventions, clone(MqttConventionHomeAssistant))
     end
 
     local mqttConnectionParameters = self:getMqttConnectionParameters()
