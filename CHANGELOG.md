@@ -14,6 +14,10 @@ this project loosely follows [Semantic Versioning](https://semver.org/).
   consistency check. A push to `master` with a new `QUICKAPP_VERSION` creates
   the GitHub release with the `.fqa` attached.
 
+### Removed
+- **`scripts/create_release.ps1`**: replaced by the release job in
+  `.github/workflows/ci.yml`.
+
 ## [1.0.235-fork-2] - 2026-10-19
 
 ### Added
